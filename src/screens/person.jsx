@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { s, A, Logo, Back, Avatar, Toggle, Seg, Nav, I, btn, section, card, go, toast } from '../ui.jsx';
+import { s, A, Logo, Back, Avatar, Toggle, Seg, Nav, I, btn, section, card, go, toast, useTwoTap } from '../ui.jsx';
 import { update, useStore, dosesFor, markTaken, clock, todayLabel } from '../store.js';
 import { METRICS, statusOf, sugarText, sugarUnit, outOfRange } from '../data.js';
 
@@ -189,11 +189,8 @@ export function Locate({ p }) {
   const contact = p.contacts[0];
   const shareText = `${p.name} is at ${p.address} (from ${p.her} watch, via myDoc).`;
   const share = async (to) => {
-    try {
-      if (navigator.share) { await navigator.share({ title: 'Location of ' + p.name, text: shareText }); return; }
-      await navigator.clipboard.writeText(shareText);
-      toast(to ? `Copied. Paste it to ${to}.` : 'Location copied');
-    } catch { /* cancelled */ }
+    try { await navigator.share({ title: 'Location of ' + p.name, text: shareText }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(shareText); toast(to ? `Copied. Paste it to ${to}.` : 'Location copied'); } catch { toast(shareText); }
   };
   const label = 'font-size: 11px; font-weight: 600; color: #7A6E5A';
   return (
@@ -242,7 +239,8 @@ export function Sent({ p }) {
   const st = useStore();
   const [at] = useState(clock());
   const vit = ['sugar', 'bp'].filter((k) => p.vitals[k]).map((k) => (k === 'sugar' ? 'Sugar ' + sugarText(p.vitals.sugar.now, st.settings.unit) : 'BP ' + p.vitals.bp.show)).join(' · ') || 'None yet';
-  const call112 = () => { if (confirm('Call 112 now? Only do this in a real emergency.')) location.href = 'tel:112'; };
+  const [armed, twoTap] = useTwoTap();
+  const call112 = () => twoTap(() => { location.href = 'tel:112'; });
   const row = 'display: flex; justify-content: space-between; gap: 12px; padding: 12px 0';
   return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #F5F7F8; display: flex; flex-direction: column; padding: 12px 24px 28px; gap: 16px')}>
@@ -261,7 +259,7 @@ export function Sent({ p }) {
         </div>
         <div style={s('font-size: 12px; color: #5B6672; text-align: center')}>Test version: nothing was really sent.</div>
       </div>
-      <button type="button" onClick={call112} style={s(btn.outline)}>Call 112</button>
+      <button type="button" onClick={call112} style={s(btn.outline + (armed ? '; background: #D62839; color: #FFFFFF; border-color: #D62839' : ''))}>{armed ? 'Real emergency? Tap again to call 112' : 'Call 112'}</button>
       <A to="/home" style={btn.primary}>Back to home</A>
     </main>
   );

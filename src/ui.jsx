@@ -19,20 +19,37 @@ export const s = (css) => {
 
 // ---- routing (hash based so it works from any folder) --------------------
 
-const path = () => location.hash.replace(/^#/, '') || '/';
-export const go = (to) => { location.hash = to; };
+// Inside a frame (the share link) the address bar can't be used, so the
+// current screen is also kept in memory.
+const framed = window.self !== window.top;
+let current = (!framed && location.hash.replace(/^#/, '')) || '/';
+const routeSubs = new Set();
+const setRoute = (to) => { current = to; routeSubs.forEach((f) => f(to)); window.scrollTo(0, 0); };
+export const go = (to) => {
+  if (framed) setRoute(to);
+  else location.hash = to;
+};
 export const useRoute = () => {
-  const [p, set] = useState(path());
+  const [p, set] = useState(current);
   useEffect(() => {
-    const f = () => { set(path()); window.scrollTo(0, 0); };
-    addEventListener('hashchange', f);
-    return () => removeEventListener('hashchange', f);
+    routeSubs.add(set);
+    const f = () => setRoute(location.hash.replace(/^#/, '') || '/');
+    if (!framed) addEventListener('hashchange', f);
+    return () => { routeSubs.delete(set); removeEventListener('hashchange', f); };
   }, []);
   return p;
 };
 
 export function A({ to, style, children, ...rest }) {
-  return <a href={'#' + to} style={typeof style === 'string' ? s(style) : style} {...rest}>{children}</a>;
+  const click = (e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(to); };
+  return <a href={'#' + to} onClick={click} style={typeof style === 'string' ? s(style) : style} {...rest}>{children}</a>;
+}
+
+// A button that asks for a second tap instead of a pop-up confirm.
+export function useTwoTap(ms = 4000) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), ms); return () => clearTimeout(t); }, [armed]);
+  return [armed, (fn) => { if (armed) { setArmed(false); fn(); } else setArmed(true); }];
 }
 
 // ---- toast ----------------------------------------------------------------
@@ -95,9 +112,9 @@ export function Nav({ tab, medsTo }) {
   const item = (on) => s('display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; text-decoration: none; ' + (on ? 'font-weight: 700; color: #0B7A75' : 'font-weight: 500; color: #5B6672'));
   return (
     <nav style={s('position: sticky; bottom: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #FFFFFF; min-height: 80px; padding-bottom: max(8px, env(safe-area-inset-bottom)); box-sizing: border-box; border-radius: 24px 24px 0 0; box-shadow: 0 -6px 24px rgba(20,32,43,0.06); margin-top: 16px')}>
-      <a href="#/home" style={item(tab === 'people')} aria-current={tab === 'people' ? 'page' : undefined}>{tab === 'people' ? <I.peopleFill /> : <I.people />}People</a>
-      <a href={'#' + medsTo} style={item(tab === 'meds')} aria-current={tab === 'meds' ? 'page' : undefined}><I.pill size={24} />Meds</a>
-      <a href="#/profile" style={item(tab === 'profile')} aria-current={tab === 'profile' ? 'page' : undefined}>{tab === 'profile' ? <I.userFill /> : <I.user />}Profile</a>
+      <A to="/home" style={item(tab === 'people')} aria-current={tab === 'people' ? 'page' : undefined}>{tab === 'people' ? <I.peopleFill /> : <I.people />}People</A>
+      <A to={medsTo} style={item(tab === 'meds')} aria-current={tab === 'meds' ? 'page' : undefined}><I.pill size={24} />Meds</A>
+      <A to="/profile" style={item(tab === 'profile')} aria-current={tab === 'profile' ? 'page' : undefined}>{tab === 'profile' ? <I.userFill /> : <I.user />}Profile</A>
     </nav>
   );
 }

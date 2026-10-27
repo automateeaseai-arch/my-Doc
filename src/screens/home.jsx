@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { s, A, Logo, Avatar, Toggle, Seg, Nav, I, btn, section, go, toast } from '../ui.jsx';
+import { s, A, Logo, Avatar, Toggle, Seg, Nav, I, btn, section, go, toast, useTwoTap } from '../ui.jsx';
 import { update, useStore, dosesFor, greeting, longDate, todayKey, resetAll } from '../store.js';
 import { METRICS, ALERTS, statusOf, sugarText, outOfRange, warningsOf } from '../data.js';
 
@@ -152,7 +152,7 @@ export function Summary() {
   const first = st.people.flatMap((p) => p.doses.filter((d) => d[0] !== '—').map((d) => ({ p, t: d[0], name: d[1] }))).sort((a, b) => a.t.localeCompare(b.t))[0];
   const share = async () => {
     const text = `myDoc daily summary, ${longDate()}: ${taken} of ${total} doses taken, ${warnings} warning${warnings === 1 ? '' : 's'}.`;
-    try { if (navigator.share) await navigator.share({ title: 'myDoc daily summary', text }); else await navigator.clipboard.writeText(text); setShared(true); } catch { /* cancelled */ }
+    try { await navigator.share({ title: 'myDoc daily summary', text }); setShared(true); } catch (e) { if (e && e.name === 'AbortError') return; try { await navigator.clipboard.writeText(text); toast('Summary copied. Paste it to your family.'); setShared(true); } catch { toast(text); } }
   };
   const badge = (p, w) => (w === 0 ? ['All normal', 'background: #E3F5F3; color: #075955', ''] : p.self ? [w + ' warning' + (w > 1 ? 's' : ''), 'background: #FFF1DB; color: #8A5300', ''] : [w + ' warning' + (w > 1 ? 's' : ''), 'background: #D62839; color: #FFFFFF', 'md-wave']);
   return (
@@ -215,6 +215,7 @@ export function Profile() {
   const row = 'display: flex; align-items: center; justify-content: space-between; min-height: 52px; font-size: 14px; font-weight: 600; color: #14202B; text-decoration: none; border: 0; background: transparent; font-family: inherit; padding: 0; cursor: pointer; width: 100%; text-align: left';
   const signOut = () => { update(() => ({ signedIn: false })); go('/welcome'); };
   const sel = st.people[Math.min(st.sel, st.people.length - 1)];
+  const [armed, twoTap] = useTwoTap();
   return (
     <div style={s('min-height: 100dvh; background: #F5F7F8; display: flex; flex-direction: column')}>
       <main style={s('display: flex; flex-direction: column; gap: 16px; padding: 12px 24px 0; flex-grow: 1')}>
@@ -282,7 +283,7 @@ export function Profile() {
 
         <div style={s('display: flex; flex-direction: column; background: #FFFFFF; border-radius: 20px; padding: 2px 14px')}>
           <button type="button" onClick={() => toast('Help: call 0809 000 0000 or write to help@mydoc.app (sample)')} style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Help and support<I.chev size={18} color="#5B6672" /></button>
-          <button type="button" onClick={() => { if (confirm('Clear everything saved on this phone and start again with the sample data?')) { resetAll(); go('/welcome'); } }} style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Privacy and data: reset this phone<I.chev size={18} color="#5B6672" /></button>
+          <button type="button" onClick={() => twoTap(() => { resetAll(); go('/welcome'); })} style={s(row + '; border-bottom: 1px solid #E4E8EC' + (armed ? '; color: #A81C2B' : ''))}>{armed ? 'Tap again to clear this phone' : 'Privacy and data: reset this phone'}<I.chev size={18} color="#5B6672" /></button>
           <button type="button" onClick={signOut} style={s(row + '; color: #A81C2B')}>Sign out</button>
         </div>
         <div style={s('font-size: 12px; color: #5B6672; text-align: center')}>myDoc version 1.0 · sample data</div>
