@@ -2,9 +2,9 @@
 // medicine and alerts as the caregiver's phone, on a 198 × 242 face.
 import { useEffect, useRef, useState } from 'react';
 import { s } from '../ui.jsx';
-import { useLive, markAlertsRead, sendToWatch, createPerson, linkWatch, readCode, METRICS, statusOf } from '../live.js';
-import { CONDITIONS, ORDER, dayKey, ago, initials } from '../health.js';
-import { setOption, resetWatch } from './sim.js';
+import { useLive, markAlertsRead, sendToWatch, requestLink, readCode, METRICS, statusOf } from '../live.js';
+import { ORDER, dayKey, ago } from '../health.js';
+import { setOption, resetWatch, startCarerLink } from './sim.js';
 
 // Extra colours the caregiver screens use, per watch theme (from the design files).
 const extra = (dark) => (dark
@@ -47,7 +47,7 @@ function useNewAlerts(people, onNew) {
 export default function CarerFace({ st, tBase }) {
   const t = { ...tBase, ...extra(st.theme === 'dark') };
   const live = useLive();
-  const [nav, setNav] = useState(st.seenLinked ? { s: 'people' } : { s: 'linked' });
+  const [nav, setNav] = useState(st.linked && !st.seenLinked ? { s: 'linked' } : { s: 'people' });
   const [i, setI] = useState(0);
   const [sent, setSent] = useState({});
   const [toggles, setToggles] = useState({ r: true, d: true, s: true });
@@ -85,14 +85,8 @@ export default function CarerFace({ st, tBase }) {
     </div>
   );
 
-  // ---- add a person: code keypad (WCAddCode) → their profile (WSetupAdd) → emergency contact (WContact) ----
-  if (nav.s === 'addcode') return <AddCode t={t} onBack={() => go('people')} onNext={(code, c) => go('addsetup', { code, c })} />;
-  if (nav.s === 'addsetup') return <AddSetup t={t} c={nav.c} onBack={() => go('addcode')} onNext={(name, conds) => go('addcontact', { code: nav.code, c: nav.c, name, conds })} />;
-  if (nav.s === 'addcontact') return <AddContact t={t} people={people} onDone={async (contacts, autoAlert) => {
-    const id = await createPerson({ name: nav.name, self: false, conds: nav.conds, contacts, autoAlert, phone: '', pronoun: '' });
-    await linkWatch(nav.code, { id, conds: nav.conds, name: nav.name }, nav.c);
-    setI(people.length); go('people');
-  }} />;
+  // ---- add a person: type the code from their watch (WCAddCode); they accept on their watch ----
+  if (nav.s === 'addcode') return <AddCode t={t} onBack={() => go('people')} onAccepted={(pid) => { const k = people.findIndex((x) => x.id === pid); setI(k < 0 ? 0 : k); go('people'); }} />;
 
   // ---- full-screen alert (WCAlert) ----
   if (nav.s === 'alert' && P(nav.pid)) {
@@ -418,20 +412,34 @@ function MapBg({ t, faded, street = 'Allen Ave', area = 'Ikeja' }) {
 
 // ---- add a person from the watch ----------------------------------------------------
 
-function AddCode({ t, onBack, onNext }) {
+function AddCode({ t, onBack, onAccepted }) {
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(null);
   const ready = code.length === 6;
+  useEffect(() => () => waiting && waiting.stop && waiting.stop(), [waiting]);
   const next = async () => {
     if (!ready || busy) return;
     setBusy(true); setErr('');
     try {
       const c = await readCode(code);
       if (c.role === 'carer') throw Object.assign(new Error(), { code: 'carer' });
-      onNext(code, c);
+      const w = { name: c.name || 'them' };
+      w.stop = await requestLink(code, c, (r) => { if (r === 'accepted') onAccepted(c.pid); else { setWaiting(null); setErr(w.name + ' said no'); } });
+      setWaiting(w);
     } catch (x) { setErr(x.code === 'expired' ? 'Code expired' : x.code === 'carer' ? "That's a caregiver watch" : 'No watch shows that code'); } finally { setBusy(false); }
   };
+  if (waiting) return (
+    <div style={base(t, 'padding: 8px 14px 12px; align-items: center; gap: 6px; text-align: center')}>
+      <Logo t={t} />
+      <span style={s(title + '; font-size: 13px; margin-top: 10px')}>ASK SENT</span>
+      <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted }}>Waiting for {waiting.name} to accept on their watch.</span>
+      <div style={s('flex-grow: 1')} />
+      <span style={{ ...s('display: flex; align-items: center; gap: 6px; font-size: 10px'), color: t.muted }}>Waiting <span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
+      <button type="button" onClick={() => { waiting.stop && waiting.stop(); setWaiting(null); onBack(); }} style={{ ...s('border: 0; background: transparent; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer'), color: t.muted }}>Cancel</button>
+    </div>
+  );
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'];
   return (
     <div style={base(t, 'padding: 2px 12px 8px; gap: 4px')}>
@@ -448,50 +456,41 @@ function AddCode({ t, onBack, onNext }) {
   );
 }
 
-function AddSetup({ t, c, onBack, onNext }) {
-  const [name, setName] = useState('');
-  const [conds, setConds] = useState(() => Object.fromEntries(((c.setup && c.setup.conds) || []).map((x) => [x, true])));
-  const any = Object.values(conds).some(Boolean) && name.trim();
-  return (
-    <div style={{ ...base(t, 'padding: 4px 14px 10px; gap: 4px; overflow-y: auto'), scrollbarWidth: 'none' }}>
-      <div style={s('display: flex; align-items: center; justify-content: space-between; flex-shrink: 0')}><Back t={t} onClick={onBack} /><Logo t={t} size="lg" /><span style={s('width: 32px')} /></div>
-      <label htmlFor="w-name" style={s('font-size: 14px; font-weight: 800; letter-spacing: 0.3px')}>THEIR NAME</label>
-      <input id="w-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Papa Obi" style={{ ...s('flex-shrink: 0; height: 28px; border-radius: 9px; padding: 0 8px; font-size: 12px; font-family: inherit; box-sizing: border-box; outline: none'), background: t.box, border: '1.5px solid ' + t.boxLine, color: t.fg }} />
-      <span style={s('font-size: 14px; font-weight: 800; letter-spacing: 0.3px; margin-top: 2px')}>CHOOSE CONDITION</span>
-      <div style={s('display: flex; flex-direction: column; gap: 5px')}>
-        {CONDITIONS.map((x) => { const on = !!conds[x]; return <button key={x} type="button" aria-pressed={on} onClick={() => setConds({ ...conds, [x]: !on })} style={{ ...s('flex-shrink: 0; height: 24px; border-radius: 9px; font-size: 10px; font-weight: 700; font-family: inherit; cursor: pointer'), background: on ? '#2BB5B0' : 'transparent', color: on ? '#14202B' : t.fg, border: '1.5px solid ' + (on ? '#2BB5B0' : t.line) }}>{x.toUpperCase().replace(' / ', '/')}</button>; })}
+// A caregiver watch that isn't linked to the caregiver's phone yet: link it from Settings.
+export function CarerUnlinked({ st, t: tBase }) {
+  const t = { ...tBase, ...extra(st.theme === 'dark') };
+  const [screen, setScreen] = useState('home');
+  if (screen === 'code') {
+    const code = st.code || '······';
+    return (
+      <div style={base(t, 'padding: 4px 14px 12px; align-items: center; gap: 6px; text-align: center')} aria-label={'Linking code ' + code}>
+        <div style={s('display: flex; width: 100%; align-items: center; justify-content: space-between')}><Back t={t} onClick={() => setScreen('settings')} /><Logo t={t} /><span style={s('width: 32px')} /></div>
+        <span style={s(title + '; font-size: 14px')}>LINK TO YOUR PHONE</span>
+        <span style={s('display: flex; gap: 4px; margin-top: 2px')}>
+          {code.split('').map((n, k) => <span key={k} style={{ ...s('width: 24px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800'), background: t.box, border: '1px solid ' + t.boxLine, marginRight: k === 2 ? 6 : 0 }}>{n}</span>)}
+        </span>
+        <span style={{ fontSize: 10, lineHeight: 1.4, color: t.muted, marginTop: 2 }}>On your phone open myDoc › Profile › Pair a watch and type this code.</span>
+        <div style={s('flex-grow: 1')} />
+        <span style={{ ...s('display: flex; align-items: center; gap: 6px; font-size: 10px'), color: t.muted }}>Waiting <span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
       </div>
-      <button type="button" disabled={!any} onClick={() => onNext(name.trim(), CONDITIONS.filter((x) => conds[x]))} style={{ ...s(btn + '; flex-shrink: 0; height: 34px; margin-top: 6px; font-size: 24px; font-weight: 800; background: transparent'), color: any ? t.teal : t.muted }}>DONE ...</button>
+    );
+  }
+  if (screen === 'settings') return (
+    <div style={base(t, 'padding: 4px 10px 10px; gap: 6px')}>
+      <div style={s('display: flex; align-items: center; justify-content: space-between')}><Back t={t} onClick={() => setScreen('home')} /><span style={s(title + '; font-size: 14px')}>SETTINGS</span><span style={s('width: 32px')} /></div>
+      <button type="button" onClick={() => { startCarerLink(); setScreen('code'); }} style={s(btn + '; height: 40px; border-radius: 14px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>LINK TO MY PHONE</button>
+      <div style={{ ...s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 12px'), background: t.seg }}>
+        {['light', 'dark'].map((k) => <button key={k} type="button" onClick={() => setOption({ theme: k })} style={{ ...s(btn + '; height: 26px; border-radius: 9px; font-size: 11px; font-weight: 700'), background: (st.theme || 'light') === k ? '#2BB5B0' : 'transparent', color: (st.theme || 'light') === k ? '#14202B' : t.fg }}>{k === 'light' ? 'Light' : 'Dark'}</button>)}
+      </div>
     </div>
   );
-}
-
-function AddContact({ t, people, onDone }) {
-  const known = [];
-  for (const p of people) for (const c of p.contacts) if (!known.find((k) => k.phone === c.phone)) known.push(c);
-  const [pick, setPick] = useState(known[0] || null);
-  const [listOpen, setListOpen] = useState(false);
-  const [auto, setAuto] = useState(true);
-  const [busy, setBusy] = useState(false);
   return (
-    <div style={{ ...base(t, 'padding: 6px 12px 8px; gap: 5px; overflow-y: auto'), scrollbarWidth: 'none' }}>
-      <div style={s('display: flex; justify-content: center')}><Logo t={t} /></div>
-      <span style={s('font-size: 13px; font-weight: 800; letter-spacing: 0.3px')}>EMERGENCY CONTACT</span>
-      {pick && (
-        <div style={{ ...s('flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 8px; border-radius: 14px'), border: '1.5px solid ' + t.line }}>
-          <span style={s('width: 28px; height: 28px; flex-shrink: 0; border-radius: 10px; background: #FCE1B0; color: #6B4100; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center')}>{pick.ini || initials(pick.name)}</span>
-          <span style={s('display: flex; flex-direction: column; flex-grow: 1; min-width: 0')}><span style={{ fontSize: 13, fontWeight: 800, color: t.red }}>{pick.name}</span><span style={{ fontSize: 9, color: t.muted }}>{pick.rel} · {pick.phone}</span></span>
-          <button type="button" onClick={() => setPick(null)} aria-label={'Remove ' + pick.name} style={{ ...s('width: 28px; height: 28px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center'), color: t.muted }}><Close /></button>
-        </div>
-      )}
-      {listOpen ? known.filter((k) => k !== pick).map((k) => <button key={k.phone} type="button" onClick={() => { setPick(k); setListOpen(false); }} style={{ ...s('flex-shrink: 0; height: 28px; border-radius: 10px; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer; background: transparent'), border: '1px solid ' + t.line, color: t.fg }}>{k.name} · {k.rel}</button>)
-        : <button type="button" onClick={() => setListOpen(true)} style={{ ...s('flex-shrink: 0; height: 30px; border-radius: 12px; background: transparent; font-size: 11px; font-weight: 800; font-family: inherit; cursor: pointer'), border: '1.5px dashed ' + t.teal, color: t.teal }}>+ FROM PHONE CONTACTS</button>}
-      {listOpen && !known.filter((k) => k !== pick).length && <span style={{ fontSize: 9, color: t.muted }}>No other contacts yet. Add them on your phone.</span>}
-      <button type="button" role="switch" aria-checked={auto} onClick={() => setAuto(!auto)} style={{ ...s('flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 10px; text-align: left; cursor: pointer'), color: t.fg }}>
-        <span>Alert them if a reading is high</span><span style={{ ...s('flex-shrink: 0; width: 34px; height: 20px; border-radius: 10px; padding: 2px; box-sizing: border-box; display: flex'), background: auto ? '#2BB5B0' : t.off, justifyContent: auto ? 'flex-end' : 'flex-start' }}><span style={s('width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF')} /></span>
-      </button>
+    <div style={base(t, 'padding: 4px 12px 12px; align-items: center; gap: 6px; text-align: center')}>
+      <div style={s('display: flex; width: 100%; align-items: center; justify-content: space-between')}><span style={s('width: 32px')} /><Logo t={t} size="lg" /><button type="button" onClick={() => setScreen('settings')} aria-label="Settings" style={{ ...s('display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 0; background: transparent; padding: 0; cursor: pointer'), color: t.teal }}><Gear /></button></div>
+      <span style={s(title + '; font-size: 15px; letter-spacing: 0.5px; margin-top: 6px')}>INTEREST</span>
+      <span style={{ fontSize: 11, lineHeight: 1.45, color: t.muted }}>Link this watch to your phone to see the people you look after.</span>
       <div style={s('flex-grow: 1')} />
-      <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await onDone(pick ? [pick] : [], auto); } finally { setBusy(false); } }} style={{ ...s(btn + '; flex-shrink: 0; height: 30px; font-size: 22px; font-weight: 800; background: transparent'), color: t.teal }}>{busy ? 'SAVING…' : 'DONE ...'}</button>
+      <button type="button" onClick={() => setScreen('settings')} style={s(btn + '; width: 100%; height: 34px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>OPEN SETTINGS</button>
     </div>
   );
 }

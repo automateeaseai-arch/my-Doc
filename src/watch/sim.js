@@ -1,7 +1,7 @@
-// The simulated watch: pairs with a caregiver, sends readings, logs doses, SOS.
+// The simulated watch: sets up its wearer, pairs with caregivers, sends readings, logs doses, SOS.
 // It writes exactly what a real watch app would write, so the phone app can't tell the difference.
 import * as be from '../backend/index.js';
-import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins } from '../health.js';
+import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins, initials } from '../health.js';
 import { startLive } from '../live.js';
 
 const KEY = 'mydoc.watch';
@@ -42,7 +42,7 @@ export const SCENARIOS = {
 
 let st = { ready: false, uid: null, code: null, pid: null, patient: null, today: {}, linked: false, lost: false, ...load() };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; save({ code: st.code, pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
+const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
 export const getSim = () => st;
 export const onSim = (f) => { subs.add(f); return () => subs.delete(f); };
 export const setOption = (patch) => set(patch);
@@ -56,50 +56,103 @@ export async function startSim() {
   be.onAuth(async (u) => {
     if (!u) { await be.signInAnon(); return; }
     set({ uid: u.uid, ready: true });
-    if (st.carer) startCarer(); else if (st.pid) follow(); else if (st.setup && st.setup.done) newCode();
+    if (st.carer) startCarer(); else if (st.pid) follow();
   });
   setInterval(tick, 60000);
   setInterval(checkDoses, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 }
 
-async function newCode() {
-  stop();
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const role = st.setup.role || 'patient';
-  await be.setDoc('codes/' + code, { watchUid: st.uid, createdAt: Date.now(), role, battery: st.battery, ...(role === 'patient' ? { setup: { self: true, conds: st.setup.conds } } : {}) });
-  set({ code, pid: null, carer: null, patient: null, linked: false, lost: false });
-  stops.push(be.watchDoc('codes/' + code, (c) => {
-    if (c && c.pid) { set({ pid: c.pid, linked: true }); be.deleteDoc('codes/' + code).catch(() => {}); follow(true); }
-    if (c && c.carerUid) {
-      set({ carer: { uid: c.carerUid, name: c.carerName, carers: [...new Set([...(c.carers || []), st.uid])] }, linked: true });
-      be.deleteDoc('codes/' + code).catch(() => {});
-      startCarer();
-    }
-  }));
+const newCodeNumber = () => String(Math.floor(100000 + Math.random() * 900000));
+
+// ---- patient watch ------------------------------------------------------------------
+
+// Setup creates the patient's own record; the watch works on its own from here.
+// Caregivers join later, when the patient pairs from Settings and accepts them.
+export async function finishSetup({ name, conds, contacts }) {
+  const pid = be.newId();
+  await be.setDoc('patients/' + pid, {
+    name, ini: initials(name), self: false, conds, contacts, autoAlert: true, phone: '', pronoun: '',
+    carers: [], carerNames: {}, carerGroups: {}, ownerUid: st.uid, watchUid: st.uid,
+    doses: [], created: Date.now(), watchInfo: { battery: st.battery, lastSeen: Date.now() }
+  });
+  set({ setup: { done: true, role: 'patient' }, pid });
+  follow(true);
 }
 
-function follow(justLinked) {
+function follow(fresh) {
   stop();
   stops.push(be.watchDoc('patients/' + st.pid, async (p) => {
     if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true }); return; }
     set({ patient: p, lost: false });
-    if (justLinked) { justLinked = false; await setPlace(st.place || 0); if (!p.recent) await backfill(p); else tick(); }
+    if (fresh) { fresh = false; await setPlace(st.place || 0); if (!p.recent) await backfill(p); else tick(); }
   }));
   stops.push(be.watchDoc(`patients/${st.pid}/doselog/${dayKey()}`, (d) => set({ today: (d && d.taken) || {} })));
 }
 
-// First-time setup on the watch (designs: who wears it, then myself + conditions).
-export async function finishSetup(conds) {
-  set({ setup: { done: true, role: 'patient', self: true, conds } });
-  await newCode();
+// Settings › Pair with a caregiver: show a code and wait for someone to type it.
+let codeStop = null;
+export async function startPairing() {
+  stopPairing();
+  const code = newCodeNumber();
+  await be.setDoc('codes/' + code, { watchUid: st.uid, pid: st.pid, role: 'patient', name: st.patient ? st.patient.name : '', createdAt: Date.now() });
+  set({ code, request: null });
+  codeStop = be.watchDoc('codes/' + code, (c) => { if (c && c.request && !c.status) set({ request: c.request }); });
 }
-export async function finishCarerSetup() {
-  set({ setup: { done: true, role: 'carer' } });
-  await newCode();
+export function stopPairing() {
+  if (codeStop) codeStop();
+  codeStop = null;
+  if (st.code) be.deleteDoc('codes/' + st.code).catch(() => {});
+  set({ code: null, request: null });
+}
+// "Allow Chinedu to see your health?" Yes adds the caregiver (and their own watch).
+export async function answerRequest(yes) {
+  const r = st.request, code = st.code, p = st.patient;
+  if (!r || !p) return;
+  if (yes) {
+    const group = [...new Set([r.carerUid, ...(r.carers || [])])];
+    await be.updateDoc('patients/' + st.pid, {
+      carers: [...new Set([...(p.carers || []), ...group])],
+      carerNames: { ...(p.carerNames || {}), [r.carerUid]: r.carerName },
+      carerGroups: { ...(p.carerGroups || {}), [r.carerUid]: group }
+    });
+  }
+  await be.updateDoc('codes/' + code, { status: yes ? 'accepted' : 'declined' });
+  if (codeStop) codeStop();
+  codeStop = null;
+  setTimeout(() => be.deleteDoc('codes/' + code).catch(() => {}), 5000);
+  set({ code: null, request: null });
+}
+// Settings › My caregivers › Remove.
+export async function removeCarer(uid) {
+  const p = st.patient, group = ((p.carerGroups || {})[uid]) || [uid];
+  const names = { ...(p.carerNames || {}) }, groups = { ...(p.carerGroups || {}) };
+  delete names[uid]; delete groups[uid];
+  await be.updateDoc('patients/' + st.pid, { carers: (p.carers || []).filter((x) => !group.includes(x)), carerNames: names, carerGroups: groups });
 }
 
-// Caregiver watch: the same live data as the caregiver's phone (see live.js).
+// ---- caregiver watch ------------------------------------------------------------------
+
+export function finishCarerSetup() { set({ setup: { done: true, role: 'carer' } }); }
+
+// Settings › Link to my phone: a code the caregiver types on their phone.
+export async function startCarerLink() {
+  stopPairing();
+  const code = newCodeNumber();
+  await be.setDoc('codes/' + code, { watchUid: st.uid, role: 'carer', createdAt: Date.now() });
+  set({ code });
+  codeStop = be.watchDoc('codes/' + code, (c) => {
+    if (c && c.carerUid) {
+      if (codeStop) codeStop();
+      codeStop = null;
+      be.deleteDoc('codes/' + code).catch(() => {});
+      set({ code: null, carer: { uid: c.carerUid, name: c.carerName, carers: [...new Set([...(c.carers || []), st.uid])] }, linked: true });
+      startCarer();
+    }
+  });
+}
+
+// The caregiver watch shows the same live data as the caregiver's phone (see live.js).
 let carerStarted = false;
 function startCarer() {
   stop();
@@ -107,17 +160,12 @@ function startCarer() {
   carerStarted = true;
   startLive({ asCarer: st.carer });
 }
-export function resetWatch() {
-  if (st.pid && st.patient) be.updateDoc('patients/' + st.pid, { watchUid: null }).catch(() => {});
-  stop();
-  set({ setup: null, code: null, pid: null, carer: null, patient: null, linked: false, lost: false, seenLinked: false });
-  if (carerStarted) location.reload(); // drop the caregiver's live data
-}
 
-export async function unlink() {
-  if (st.pid && st.patient) await be.updateDoc('patients/' + st.pid, { watchUid: null }).catch(() => {});
-  set({ pid: null, patient: null, linked: false });
-  newCode();
+// Simulator only: forget this watch and start setup again.
+export function resetWatch() {
+  stop(); stopPairing();
+  set({ setup: null, code: null, pid: null, carer: null, patient: null, request: null, linked: false, lost: false, seenLinked: false });
+  if (carerStarted) location.reload(); // drop the caregiver's live data
 }
 
 // ---- writing data ----------------------------------------------------------------

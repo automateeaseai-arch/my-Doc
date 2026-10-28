@@ -34,7 +34,7 @@ function EmptyHome({ name }) {
           <span style={s('width: 72px; height: 72px; border-radius: 24px; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center')}><I.peopleFill /></span>
           <div style={s('font-size: 18px; font-weight: 700')}>Add the first person</div>
           <div style={s('font-size: 14px; line-height: 1.55; color: #5B6672')}>Add someone you look after (or yourself), then link their watch to see their readings here.</div>
-          <A to="/setup" style={btn.primary + '; width: 100%'}>+ Add a person</A>
+          <A to="/add" style={btn.primary + '; width: 100%'}>+ Add a person</A>
         </div>
       </main>
       <Nav tab="people" medsTo="/home" />
@@ -118,7 +118,7 @@ export function Home() {
             <I.chev color="#0B7A75" />
           </A>
         </div>
-        <A to="/setup" style={btn.dashed + '; background: transparent'}>+ Add a person</A>
+        <A to="/add" style={btn.dashed + '; background: transparent'}>+ Add a person</A>
       </main>
       <Nav tab="people" medsTo={'/p/' + p.id + '/meds'} />
     </div>
@@ -279,7 +279,7 @@ export function Profile() {
             ))}
           </div>}
           <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px')}>
-            <A to="/setup" style="display: flex; height: 44px; align-items: center; justify-content: center; border: 1.5px dashed #0B7A75; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; color: #0B7A75; background: #FFFFFF">+ Add a person</A>
+            <A to="/add" style="display: flex; height: 44px; align-items: center; justify-content: center; border: 1.5px dashed #0B7A75; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; color: #0B7A75; background: #FFFFFF">+ Add a person</A>
             <A to="/pair" style="display: flex; height: 44px; align-items: center; justify-content: center; border: 1.5px dashed #0B7A75; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; color: #0B7A75; background: #FFFFFF">Pair a watch</A>
           </div>
         </div>

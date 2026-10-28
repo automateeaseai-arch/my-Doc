@@ -114,16 +114,6 @@ const me = () => state.user;
 // Who acts: the caregiver (on the phone, or through their linked watch).
 const actor = () => state.asCarer || { uid: me().uid, name: (state.profile && state.profile.name) || me().name || 'Your caregiver', carers: [me().uid, ...((state.profile && state.profile.watches) || [])] };
 
-export async function createPerson({ name, self, conds, contacts, autoAlert, phone, pronoun }) {
-  const a = actor();
-  const id = be.newId();
-  await be.setDoc('patients/' + id, {
-    name, ini: initials(name), self: !!self, conds, contacts, autoAlert, phone: phone || '', pronoun: pronoun || '',
-    color: state.raw.length % AVATARS.length, carers: [...new Set(a.carers)], carerNames: { [a.uid]: a.name }, ownerUid: a.uid,
-    watchUid: null, doses: [], created: Date.now()
-  });
-  return id;
-}
 // The caregiver's own details (phone sign-up step "About you").
 export async function saveProfile(data) {
   await be.setDoc('users/' + me().uid, { ...data, updated: Date.now() }, { merge: true });
@@ -153,8 +143,8 @@ export const sendToWatch = (p, msg) => be.updateDoc('patients/' + p.id, { ping: 
 
 export async function endSOS(p) { await be.updateDoc('patients/' + p.id, { sos: { active: false, endedAt: Date.now() } }); }
 
-// Pairing: a watch shows a 6-digit code and waits on codes/{code}.
-// A patient's watch is linked to one person; a caregiver's own watch to the caregiver.
+// Pairing: a watch shows a 6-digit code (codes/{code}). A patient's code (from their watch's
+// Settings) asks the patient to accept; a caregiver watch's code links it to the caregiver.
 export async function readCode(code) {
   const c = await be.getDoc('codes/' + code);
   if (!c || !c.watchUid) { const e = new Error('no-code'); e.code = 'no-code'; throw e; }
@@ -162,13 +152,25 @@ export async function readCode(code) {
   return c;
 }
 
-export async function linkWatch(code, p, c) {
-  c = c || await readCode(code);
-  // Conditions the patient chose on the watch during its setup are added to the person.
-  const fromWatch = (c.setup && c.setup.conds) || [];
-  const conds = [...new Set([...(p.conds || []), ...fromWatch])];
-  await be.updateDoc('patients/' + p.id, { watchUid: c.watchUid, conds, watchInfo: { battery: c.battery ?? 100, lastSeen: Date.now() } });
-  await be.updateDoc('codes/' + code, { pid: p.id, carerName: actor().name, personName: p.name });
+// Ask to monitor the patient whose watch shows this code. The patient answers on their watch;
+// onResult('accepted' | 'declined') is called with the answer.
+export async function requestLink(code, c, onResult) {
+  const a = actor();
+  await be.updateDoc('codes/' + code, { request: { carerUid: a.uid, carerName: a.name, carers: [...new Set(a.carers)], at: Date.now() } });
+  let done = false;
+  const finish = (r) => { if (done) return; done = true; stopCode(); clearInterval(poll); onResult(r); };
+  const stopCode = be.watchDoc('codes/' + code, (d) => { if (d && d.status) finish(d.status); });
+  // The patient's watch removes the code soon after answering; seeing the person also means yes.
+  const poll = setInterval(() => { if (state.raw.find((p) => p.id === c.pid)) finish('accepted'); }, 500);
+  return () => { done = true; stopCode(); clearInterval(poll); };
+}
+
+// Stop monitoring someone (removes you and your watch; other caregivers stay).
+export async function stopMonitoring(p) {
+  const a = actor(), group = ((p.carerGroups || {})[a.uid]) || [...new Set(a.carers)];
+  const names = { ...(p.carerNames || {}) }, groups = { ...(p.carerGroups || {}) };
+  delete names[a.uid]; delete groups[a.uid];
+  await be.updateDoc('patients/' + p.id, { carers: (p.carers || []).filter((x) => !group.includes(x)), carerNames: names, carerGroups: groups });
 }
 
 // The caregiver's own watch: it joins every person they look after (and new ones).
@@ -176,10 +178,12 @@ export async function linkCarerWatch(code, c) {
   const a = actor(), w = c.watchUid;
   const watches = [...new Set([...((state.profile && state.profile.watches) || []), w])];
   await be.setDoc('users/' + a.uid, { watches }, { merge: true });
-  await Promise.all(state.raw.map((p) => be.updateDoc('patients/' + p.id, { carers: [...new Set([...(p.carers || []), w])] })));
+  await Promise.all(state.raw.map((p) => be.updateDoc('patients/' + p.id, {
+    carers: [...new Set([...(p.carers || []), w])],
+    carerGroups: { ...(p.carerGroups || {}), [a.uid]: [...new Set([...(((p.carerGroups || {})[a.uid]) || [a.uid]), w])] }
+  })));
   await be.updateDoc('codes/' + code, { carerUid: a.uid, carerName: a.name, carers: [...new Set([a.uid, ...watches])] });
 }
 
-export async function unlinkWatch(p) { await be.updateDoc('patients/' + p.id, { watchUid: null }); }
 
 export { METRICS, statusOf };

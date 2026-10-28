@@ -8,8 +8,8 @@ Live: https://automateeaseai-arch.github.io/my-Doc/ · Watch simulator: https://
 
 - **Phone app** (`index.html`): caregiver accounts, people, contacts, medicine, alerts.
 - **Watch simulator** (`watch.html`): stands in for a smartwatch until there is hardware. Setup asks who wears it:
-  - **Patient**: conditions, then a code typed on the caregiver's phone (or watch). Sends readings, doses taken, location, battery, SOS, alerts, exactly as a real watch app would.
-  - **Caregiver**: a code typed on the caregiver's phone (Profile › Pair a watch). Shows the same people, readings, medicine and alerts as the phone; full-screen alerts; call, locate, 112; add a person by typing their watch's code.
+  - **Patient**: name, conditions and emergency contact; the watch then works on its own. Settings › Pair with a caregiver shows a code; whoever types it is asked for on the watch ("Allow … to see your health?"). Any number of caregivers; Settings › My caregivers removes them. Sends readings, doses taken, location, battery, SOS and alerts, as a real watch app would.
+  - **Caregiver**: Settings › Link to my phone shows a code for the phone (Profile › Pair a watch). Shows the same people, readings, medicine and alerts as the phone; full-screen alerts; call, locate, 112; + adds a person by their watch's code (they accept on their watch).
 - **Backend**: Firebase (Auth + Firestore) once `src/backend/config.js` is filled in. Until then everything runs "this phone only" (localStorage), and the app and simulator see each other in two tabs of the same browser.
 
 ## Firebase setup (once)

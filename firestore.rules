@@ -1,11 +1,17 @@
 rules_version = '2';
-// myDoc: a person's data can only be read by their caregivers and their linked watch.
+// myDoc: a person's record belongs to their own watch. Caregivers see it only after the
+// person accepts them on the watch (the watch adds them to `carers`).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isCarer(d) { return signedIn() && request.auth.uid in d.carers; }
     function isWatch(d) { return signedIn() && d.watchUid == request.auth.uid; }
     function patient(pid) { return get(/databases/$(database)/documents/patients/$(pid)).data; }
+    // A caregiver may add their own linked watches to people they already look after.
+    function myWatches() {
+      let u = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(u) ? get(u).data.get('watches', []) : [];
+    }
 
     // Each caregiver's own details: only they can read or change them.
     match /users/{uid} {
@@ -13,20 +19,22 @@ service cloud.firestore {
     }
 
     match /patients/{pid} {
-      allow create: if signedIn() && request.auth.uid in request.resource.data.carers;
+      // Created by the patient's watch during its setup.
+      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid;
       allow read: if isCarer(resource.data) || isWatch(resource.data);
-      allow delete: if isCarer(resource.data);
-      allow update: if isCarer(resource.data)
-        || (isWatch(resource.data) && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['recent', 'days', 'watchInfo', 'loc', 'sos', 'ping', 'simulatedHistory', 'watchUid'])
-            && (request.resource.data.watchUid == request.auth.uid || request.resource.data.watchUid == null));
+      // Caregivers may update, but only the watch may add caregivers (consent).
+      allow update: if isWatch(resource.data)
+        || (isCarer(resource.data) && request.resource.data.watchUid == resource.data.watchUid
+            && (!('carers' in request.resource.data.diff(resource.data).affectedKeys())
+                || request.resource.data.carers.hasOnly(resource.data.carers.concat(myWatches()))));
+      allow delete: if isWatch(resource.data);
 
       match /{sub}/{doc} {
         allow read, write: if isCarer(patient(pid)) || isWatch(patient(pid));
       }
     }
 
-    // Pairing codes: the watch creates one; a caregiver who types it links it.
+    // Pairing codes: a watch creates one; whoever types it can ask (request) or link.
     match /codes/{code} {
       allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid;
       allow get: if signedIn();

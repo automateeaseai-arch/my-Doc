@@ -18,8 +18,9 @@ function screen(route, live) {
   }
   switch (parts[0]) {
     case 'about': return <About key={route} query={query} />;
-    case 'setup': return <Setup key={route} query={query} />;
+    case 'setup': return query.get('edit') ? <Setup key={route} query={query} /> : <Pair key={route} query={query} mode="add" />;
     case 'pair': return <Pair key={route} query={query} />;
+    case 'add': return <Pair key={route} query={query} mode="add" />;
     case 'paired': return <Paired query={query} />;
     case 'alerts': return <Alerts />;
     case 'summary': return <Summary />;

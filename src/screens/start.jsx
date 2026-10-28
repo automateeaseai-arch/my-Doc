@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { s, A, Logo, Back, Toggle, Seg, I, btn, section, go, toast } from '../ui.jsx';
 import { update } from '../store.js';
-import { useLive, createPerson, updatePerson, removePerson, linkWatch, linkCarerWatch, readCode, saveProfile } from '../live.js';
+import { useLive, updatePerson, stopMonitoring, linkCarerWatch, readCode, requestLink, saveProfile } from '../live.js';
 import * as be from '../backend/index.js';
 import { CONDITIONS, initials } from '../health.js';
 
@@ -175,7 +175,7 @@ export function About({ query }) {
     setBusy(true); setErr('');
     try {
       await saveProfile({ name: name.trim(), phone: phone.trim(), city: city.trim(), use, aboutDone: true });
-      if (first) go(use === 'self' ? '/setup?first=1&who=self' : '/setup?first=1'); else { toast('Saved'); go('/profile'); }
+      if (first) go('/add?first=1'); else { toast('Saved'); go('/profile'); }
     } catch { setErr('Could not save. Check your internet connection and try again.'); } finally { setBusy(false); }
   };
   const opt = (k, title, sub) => (
@@ -243,18 +243,15 @@ export function Setup({ query }) {
     const nm = name.trim();
     if (!nm) return setErr(who === 'self' ? 'Please type your name.' : 'Please type their name.');
     const conds = CONDITIONS.filter((c) => on[c]);
-    const data = { name: nm, ini: initials(nm), self: who === 'self', conds, contacts, autoAlert: auto, phone: phone.trim(), pronoun: who === 'self' ? '' : pronoun };
     setBusy(true);
     try {
-      if (editing) { await updatePerson(editing.id, data); toast('Saved'); go('/home'); return; }
-      const id = await createPerson(data);
-      update(() => ({ sel: live.people.length }));
-      go('/pair?who=' + id + (first ? '&first=1' : ''));
+      await updatePerson(editing.id, { name: nm, ini: initials(nm), self: who === 'self', conds, contacts, autoAlert: auto, phone: phone.trim(), pronoun: who === 'self' ? '' : pronoun });
+      toast('Saved'); go('/home');
     } catch { setErr('Could not save. Check your internet connection and try again.'); } finally { setBusy(false); }
   };
   const del = async () => {
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 4000); return; }
-    await removePerson(editing.id); update(() => ({ sel: 0 })); toast(editing.name + ' removed'); go('/home');
+    await stopMonitoring(editing); update(() => ({ sel: 0 })); toast('You no longer monitor ' + editing.name); go('/home');
   };
 
   const addContact = (e) => {
@@ -333,7 +330,7 @@ export function Setup({ query }) {
       </div>
       <div style={s('flex-grow: 1')} />
       <button type="button" disabled={busy} onClick={done} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Saving…' : editing ? 'Save' : 'Next'}</button>
-      {editing && <button type="button" onClick={del} style={s('height: 44px; border: 0; background: transparent; color: #A81C2B; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer')}>{confirmDel ? 'Tap again to remove ' + editing.name : 'Remove ' + editing.name}</button>}
+      {editing && <button type="button" onClick={del} style={s('height: 44px; border: 0; background: transparent; color: #A81C2B; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer')}>{confirmDel ? 'Tap again to stop monitoring ' + editing.name : 'Stop monitoring ' + editing.name}</button>}
     </main>
   );
 }
@@ -349,56 +346,78 @@ const pickFromPhonebook = (set, list) => async () => {
   } catch { /* cancelled */ }
 };
 
-export function Pair({ query }) {
+// One screen for codes: "Add a person" (a patient's watch code; they accept on their watch)
+// and Profile › Pair a watch (your own caregiver watch).
+export function Pair({ query, mode = 'watch' }) {
   const live = useLive();
-  const preset = live.people.findIndex((p) => p.id === query.get('who'));
-  const [who, setWho] = useState(preset >= 0 ? preset : 0);
+  const first = query.get('first');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(null);
+  const stopRef = useRef(null);
+  useEffect(() => () => stopRef.current && stopRef.current(), []);
   const setDigit = (i, v) => {
     const d = v.replace(/\D/g, '');
     if (d.length > 1) { const all = d.slice(0, 6).split(''); setCode([0, 1, 2, 3, 4, 5].map((k) => all[k] || '')); return; }
     const next = [...code]; next[i] = d; setCode(next); setErr('');
     if (d && i < 5) document.getElementById('dg' + (i + 1))?.focus();
   };
-  const p = live.people[who];
-  const pair = async () => {
-    if (code.join('').length < 6) return setErr('Type all 6 digits shown on the watch.');
+  const submit = async () => {
+    const c6 = code.join('');
+    if (c6.length < 6) return setErr('Type all 6 digits shown on the watch.');
     setBusy(true); setErr('');
     try {
-      const c = await readCode(code.join(''));
-      // A caregiver watch ("Link to your phone") belongs to you; a patient watch to the person chosen below.
-      if (c.role === 'carer') { await linkCarerWatch(code.join(''), c); go('/paired?mine=1'); return; }
-      if (!p) { setErr('Add the person first, then pair their watch.'); return; }
-      await linkWatch(code.join(''), p, c); go('/paired?who=' + p.id);
+      const c = await readCode(c6);
+      if (c.role === 'carer') { await linkCarerWatch(c6, c); go('/paired?mine=1'); return; }
+      if (live.people.find((p) => p.id === c.pid)) { setErr('You already look after ' + (c.name || 'this person') + '.'); return; }
+      setWaiting(c.name || 'them');
+      stopRef.current = await requestLink(c6, c, (r) => {
+        if (r === 'accepted') go('/paired?who=' + c.pid);
+        else { setWaiting(null); setErr((c.name || 'They') + ' said no on their watch.'); }
+      });
     } catch (x) {
-      setErr(x.code === 'no-code' ? 'No watch is showing that code. Check the digits on the watch.' : x.code === 'expired' ? 'That code has expired. Open myDoc on the watch again for a new one.' : 'Could not link. Check your internet connection.');
+      setErr(x.code === 'no-code' ? 'No watch is showing that code. Check the digits on the watch.' : x.code === 'expired' ? 'That code has expired. Ask for a new one on the watch.' : 'Could not connect. Check your internet connection.');
     } finally { setBusy(false); }
   };
+  const add = mode === 'add';
+  if (waiting) return (
+    <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 16px; text-align: center')}>
+      <div style={s('width: 72px; height: 72px; border-radius: 36px; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center')}><I.watch /></div>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>Waiting for {waiting}</h1>
+      <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>We asked {waiting} on their watch: "Allow {(live.profile && live.profile.name) || (live.user && live.user.name) || 'you'} to see your health?" This screen moves on when they tap Yes.</p>
+      <span style={s('display: flex; gap: 6px')}><span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
+      <button type="button" onClick={() => { stopRef.current && stopRef.current(); setWaiting(null); }} style={s('height: 44px; border: 0; background: transparent; color: #0B7A75; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer')}>Cancel</button>
+    </main>
+  );
   return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 14px')}>
       <div style={s('display: flex; align-items: center; justify-content: space-between; height: 44px')}>
-        <Back to={query.get('first') ? '/home' : '/profile'} />
+        {first ? <span style={s('width: 44px')} /> : <Back to={add ? '/home' : '/profile'} />}
         <Logo />
-        <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{query.get('first') || query.get('who') ? '2 of 2' : ''}</div>
+        <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{first ? 'Step 2' : ''}</div>
       </div>
-      {(query.get('first') || query.get('who')) && <div style={s('height: 4px; border-radius: 2px; background: #0B7A75')} />}
-      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{query.get('who') ? (p && p.self ? 'Pair your watch' : 'Pair their watch') : 'Pair a watch'}</h1>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{add ? 'Add a person' : 'Pair your watch'}</h1>
       <div style={s('display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 20px; background: #F5F7F8')}>
         <div style={s('flex-shrink: 0; display: flex; flex-direction: column; align-items: center')}>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 5px 5px 0 0')} />
-          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>LINK THIS WATCH</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>••• •••</span></div></div>
+          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>{add ? 'PAIR WITH A CAREGIVER' : 'LINK TO YOUR PHONE'}</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>••• •••</span></div></div>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 0 0 5px 5px')} />
         </div>
         <ol style={s('margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: #14202B')}>
-          <li>Open myDoc on the watch.</li>
-          <li>It shows a 6-digit code.</li>
-          <li>Type the code below. This works for their watch and for your own.</li>
+          {add ? <>
+            <li>On their watch: <b>Settings › Pair with a caregiver</b>.</li>
+            <li>Type the 6-digit code it shows.</li>
+            <li>They tap <b>Yes</b> on the watch.</li>
+          </> : <>
+            <li>Set up your watch as <b>I'm a caregiver</b>.</li>
+            <li>On it: <b>Settings › Link to my phone</b>.</li>
+            <li>Type the code it shows.</li>
+          </>}
         </ol>
       </div>
       <a href="./watch.html" target="_blank" rel="noopener" style={s('display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; text-decoration: none; font-size: 13px; line-height: 1.45')}>
-        <I.watch /><span><b>No watch yet?</b> Open the watch simulator on another phone (or another tab) to get a code.</span>
+        <I.watch /><span><b>No watch yet?</b> Open the watch simulator on another phone (or another tab).</span>
       </a>
       <div style={s('display: flex; flex-direction: column; gap: 8px')}>
         <span style={s(section)}>Code from the watch</span>
@@ -412,17 +431,9 @@ export function Pair({ query }) {
         </div>
         <Err msg={err} />
       </div>
-      {live.people.length > 1 && (
-        <div style={s('display: flex; flex-direction: column; gap: 8px')}>
-          <span style={s(section)}>If it's a patient's watch, whose is it?</span>
-          <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
-            {live.people.map((q, i) => <button key={q.id} type="button" aria-pressed={who === i} onClick={() => setWho(i)} style={s('height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (who === i ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0'))}>{q.name}</button>)}
-          </div>
-        </div>
-      )}
       <div style={s('flex-grow: 1')} />
-      <button type="button" disabled={busy} onClick={pair} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Linking…' : 'Pair watch'}</button>
-      <A to="/home" style="display: flex; height: 40px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; text-decoration: none; color: #0B7A75">Skip for now</A>
+      <button type="button" disabled={busy} onClick={submit} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Checking…' : add ? 'Send request' : 'Pair watch'}</button>
+      {first && <A to="/home" style="display: flex; height: 40px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; text-decoration: none; color: #0B7A75">Skip for now</A>}
     </main>
   );
 }
@@ -457,8 +468,8 @@ export function Paired({ query }) {
           <div className="md-pop" style={s('width: 52px; height: 52px; border-radius: 26px; background: #2BB5B0; display: flex; align-items: center; justify-content: center')}><I.tick size={28} color="#14202B" /></div>
           <div style={s('display: flex; flex-direction: column; align-items: center')}><div style={s('width: 26px; height: 10px; background: #2E3A45; border-radius: 4px 4px 0 0')} /><div style={s('width: 58px; height: 68px; border-radius: 18px; background: #14202B; display: flex; align-items: center; justify-content: center')}><span style={s('font-size: 9px; font-weight: 800; color: #FFFFFF')}>{p.ini}</span></div><div style={s('width: 26px; height: 10px; background: #2E3A45; border-radius: 0 0 4px 4px')} /></div>
         </div>
-        <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>Watch linked</h1>
-        <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>{p.self ? 'Your' : p.name + "'s"} watch is now connected to your phone.</p>
+        <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>Linked</h1>
+        <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>{p.name} accepted. You can now see {p.self ? 'your' : p.her} readings and medicine.</p>
         <div style={s('width: 100%; background: #FFFFFF; border-radius: 20px; padding: 6px 16px; box-sizing: border-box; display: flex; flex-direction: column; text-align: left')}>
           {rows.map((r, i) => (
             <div key={r[0]} style={s('display: flex; align-items: center; gap: 12px; padding: 10px 0; ' + (i < rows.length - 1 ? 'border-bottom: 1px solid #E4E8EC' : ''))}>

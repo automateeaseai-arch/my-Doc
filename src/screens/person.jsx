@@ -16,7 +16,7 @@ function NoReadings({ p }) {
       <span style={s('width: 56px; height: 56px; border-radius: 28px; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center')}><I.watch /></span>
       <div style={s('font-size: 17px; font-weight: 700')}>{p.watch ? 'Waiting for the first reading' : 'No readings yet'}</div>
       <div style={s('font-size: 14px; color: #5B6672; line-height: 1.5')}>{p.watch ? `Readings appear here as soon as ${p.her} watch measures them.` : `Pair ${p.her} watch to see blood sugar, blood pressure, heart rate and oxygen here.`}</div>
-      {!p.watch && <A to={'/pair?who=' + p.id} style={btn.primary + '; width: 100%; height: 52px; font-size: 16px'}>Pair a watch</A>}
+      {!p.watch && <A to="/add" style={btn.primary + '; width: 100%; height: 52px; font-size: 16px'}>Pair a watch</A>}
     </div>
   );
 }
