@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import * as be from './backend/index.js';
 import { METRICS, ORDER, AVATARS, statusOf, showValue, doseStatus, dayKey, daysBack, when, initials } from './health.js';
 
-let state = { ready: false, user: null, profile: null, raw: [], logs: {}, alerts: {} };
+let state = { ready: false, user: null, asCarer: null, profile: null, raw: [], logs: {}, alerts: {} };
 const subs = new Set();
 const set = (patch) => { state = { ...state, ...patch }; derived = null; subs.forEach((f) => f()); };
 let derived = null;
@@ -12,15 +12,17 @@ let derived = null;
 let stopAll = [];
 const perPatient = new Map(); // pid -> unsubscribe functions
 
-export function startLive() {
+// opts.asCarer (caregiver watch): { uid, name, carers } of the caregiver this watch belongs to.
+// The watch signs in anonymously and is listed among the caregivers of each person.
+export function startLive(opts = {}) {
   be.onAuth((user) => {
     stopAll.forEach((f) => f()); stopAll = [];
     perPatient.forEach((fs) => fs.forEach((f) => f())); perPatient.clear();
-    set({ user, profile: null, raw: [], logs: {}, alerts: {}, ready: !user });
-    if (!user || user.anon) return;
-    const loaded = { people: false, profile: false };
+    set({ user, asCarer: opts.asCarer || null, profile: null, raw: [], logs: {}, alerts: {}, ready: !user });
+    if (!user || (user.anon && !opts.asCarer)) return;
+    const loaded = { people: false, profile: !!opts.asCarer };
     const done = () => loaded.people && loaded.profile;
-    stopAll.push(be.watchDoc('users/' + user.uid, (d) => { loaded.profile = true; set({ profile: d || {}, ready: done() }); }));
+    if (!opts.asCarer) stopAll.push(be.watchDoc('users/' + user.uid, (d) => { loaded.profile = true; set({ profile: d || {}, ready: done() }); }));
     stopAll.push(be.watchCol('patients', { where: ['carers', 'array-contains', user.uid] }, (rows) => {
       rows.sort((a, b) => (a.created || 0) - (b.created || 0));
       for (const p of rows) {
@@ -109,13 +111,15 @@ export const useLive = () => {
 // ---- actions -------------------------------------------------------------------
 
 const me = () => state.user;
+// Who acts: the caregiver (on the phone, or through their linked watch).
+const actor = () => state.asCarer || { uid: me().uid, name: (state.profile && state.profile.name) || me().name || 'Your caregiver', carers: [me().uid, ...((state.profile && state.profile.watches) || [])] };
 
 export async function createPerson({ name, self, conds, contacts, autoAlert, phone, pronoun }) {
-  const u = me();
+  const a = actor();
   const id = be.newId();
   await be.setDoc('patients/' + id, {
     name, ini: initials(name), self: !!self, conds, contacts, autoAlert, phone: phone || '', pronoun: pronoun || '',
-    color: state.raw.length % AVATARS.length, carers: [u.uid], carerNames: { [u.uid]: u.name || 'Your caregiver' }, ownerUid: u.uid,
+    color: state.raw.length % AVATARS.length, carers: [...new Set(a.carers)], carerNames: { [a.uid]: a.name }, ownerUid: a.uid,
     watchUid: null, doses: [], created: Date.now()
   });
   return id;
@@ -137,7 +141,7 @@ export async function removeDose(p, doseId) { await be.updateDoc('patients/' + p
 
 export async function markTaken(p, doseId, at) {
   const day = dayKey();
-  await be.setDoc(`patients/${p.id}/doselog/${day}`, { day, taken: { [doseId]: at }, by: { [doseId]: me().uid } }, { merge: true });
+  await be.setDoc(`patients/${p.id}/doselog/${day}`, { day, taken: { [doseId]: at }, by: { [doseId]: actor().uid } }, { merge: true });
 }
 
 export async function markAlertsRead(people) {
@@ -145,21 +149,37 @@ export async function markAlertsRead(people) {
 }
 
 // Messages to the patient's watch (reminders, check-ins). The watch shows them.
-export const sendToWatch = (p, msg) => be.updateDoc('patients/' + p.id, { ping: { ...msg, at: Date.now(), from: me().name || 'Your caregiver' } });
+export const sendToWatch = (p, msg) => be.updateDoc('patients/' + p.id, { ping: { ...msg, at: Date.now(), from: actor().name } });
 
 export async function endSOS(p) { await be.updateDoc('patients/' + p.id, { sos: { active: false, endedAt: Date.now() } }); }
 
-// Pairing: the watch shows a 6-digit code and waits on codes/{code}.
-export async function linkWatch(code, p) {
+// Pairing: a watch shows a 6-digit code and waits on codes/{code}.
+// A patient's watch is linked to one person; a caregiver's own watch to the caregiver.
+export async function readCode(code) {
   const c = await be.getDoc('codes/' + code);
   if (!c || !c.watchUid) { const e = new Error('no-code'); e.code = 'no-code'; throw e; }
   if (Date.now() - (c.createdAt || 0) > 30 * 60 * 1000) { const e = new Error('expired'); e.code = 'expired'; throw e; }
+  return c;
+}
+
+export async function linkWatch(code, p, c) {
+  c = c || await readCode(code);
   // Conditions the patient chose on the watch during its setup are added to the person.
   const fromWatch = (c.setup && c.setup.conds) || [];
   const conds = [...new Set([...(p.conds || []), ...fromWatch])];
   await be.updateDoc('patients/' + p.id, { watchUid: c.watchUid, conds, watchInfo: { battery: c.battery ?? 100, lastSeen: Date.now() } });
-  await be.updateDoc('codes/' + code, { pid: p.id, carerName: me().name || 'Your caregiver', personName: p.name });
+  await be.updateDoc('codes/' + code, { pid: p.id, carerName: actor().name, personName: p.name });
 }
+
+// The caregiver's own watch: it joins every person they look after (and new ones).
+export async function linkCarerWatch(code, c) {
+  const a = actor(), w = c.watchUid;
+  const watches = [...new Set([...((state.profile && state.profile.watches) || []), w])];
+  await be.setDoc('users/' + a.uid, { watches }, { merge: true });
+  await Promise.all(state.raw.map((p) => be.updateDoc('patients/' + p.id, { carers: [...new Set([...(p.carers || []), w])] })));
+  await be.updateDoc('codes/' + code, { carerUid: a.uid, carerName: a.name, carers: [...new Set([a.uid, ...watches])] });
+}
+
 export async function unlinkWatch(p) { await be.updateDoc('patients/' + p.id, { watchUid: null }); }
 
 export { METRICS, statusOf };

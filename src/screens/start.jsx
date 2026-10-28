@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { s, A, Logo, Back, Toggle, Seg, I, btn, section, go, toast } from '../ui.jsx';
 import { update } from '../store.js';
-import { useLive, createPerson, updatePerson, removePerson, linkWatch, saveProfile } from '../live.js';
+import { useLive, createPerson, updatePerson, removePerson, linkWatch, linkCarerWatch, readCode, saveProfile } from '../live.js';
 import * as be from '../backend/index.js';
 import { CONDITIONS, initials } from '../health.js';
 
@@ -364,10 +364,15 @@ export function Pair({ query }) {
   };
   const p = live.people[who];
   const pair = async () => {
-    if (!p) return setErr('Add a person first.');
     if (code.join('').length < 6) return setErr('Type all 6 digits shown on the watch.');
     setBusy(true); setErr('');
-    try { await linkWatch(code.join(''), p); go('/paired?who=' + p.id); } catch (x) {
+    try {
+      const c = await readCode(code.join(''));
+      // A caregiver watch ("Link to your phone") belongs to you; a patient watch to the person chosen below.
+      if (c.role === 'carer') { await linkCarerWatch(code.join(''), c); go('/paired?mine=1'); return; }
+      if (!p) { setErr('Add the person first, then pair their watch.'); return; }
+      await linkWatch(code.join(''), p, c); go('/paired?who=' + p.id);
+    } catch (x) {
       setErr(x.code === 'no-code' ? 'No watch is showing that code. Check the digits on the watch.' : x.code === 'expired' ? 'That code has expired. Open myDoc on the watch again for a new one.' : 'Could not link. Check your internet connection.');
     } finally { setBusy(false); }
   };
@@ -379,7 +384,7 @@ export function Pair({ query }) {
         <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{query.get('first') || query.get('who') ? '2 of 2' : ''}</div>
       </div>
       {(query.get('first') || query.get('who')) && <div style={s('height: 4px; border-radius: 2px; background: #0B7A75')} />}
-      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{p && p.self ? 'Pair your watch' : 'Pair their watch'}</h1>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{query.get('who') ? (p && p.self ? 'Pair your watch' : 'Pair their watch') : 'Pair a watch'}</h1>
       <div style={s('display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 20px; background: #F5F7F8')}>
         <div style={s('flex-shrink: 0; display: flex; flex-direction: column; align-items: center')}>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 5px 5px 0 0')} />
@@ -387,9 +392,9 @@ export function Pair({ query }) {
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 0 0 5px 5px')} />
         </div>
         <ol style={s('margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: #14202B')}>
-          <li>Open myDoc on {p && p.self ? 'your' : 'their'} watch.</li>
+          <li>Open myDoc on the watch.</li>
           <li>It shows a 6-digit code.</li>
-          <li>Type the code below.</li>
+          <li>Type the code below. This works for their watch and for your own.</li>
         </ol>
       </div>
       <a href="./watch.html" target="_blank" rel="noopener" style={s('display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; text-decoration: none; font-size: 13px; line-height: 1.45')}>
@@ -409,7 +414,7 @@ export function Pair({ query }) {
       </div>
       {live.people.length > 1 && (
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
-          <span style={s(section)}>Whose watch is it?</span>
+          <span style={s(section)}>If it's a patient's watch, whose is it?</span>
           <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
             {live.people.map((q, i) => <button key={q.id} type="button" aria-pressed={who === i} onClick={() => setWho(i)} style={s('height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (who === i ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0'))}>{q.name}</button>)}
           </div>
@@ -424,6 +429,17 @@ export function Pair({ query }) {
 
 export function Paired({ query }) {
   const live = useLive();
+  if (query.get('mine')) return (
+    <main style={s('min-height: 100dvh; box-sizing: border-box; background: #F5F7F8; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 16px')}>
+      <div style={s('height: 44px; padding-top: 8px; box-sizing: border-box')}><Logo center /></div>
+      <div style={s('flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center')}>
+        <div className="md-pop" style={s('width: 64px; height: 64px; border-radius: 32px; background: #2BB5B0; display: flex; align-items: center; justify-content: center')}><I.tick size={32} color="#14202B" /></div>
+        <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>Your watch is linked</h1>
+        <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>It shows the {live.people.length === 1 ? 'person' : live.people.length + ' people'} you look after, their readings, medicine and alerts. People you add later appear on it too.</p>
+      </div>
+      <A to="/home" style={btn.primary}>Go to home</A>
+    </main>
+  );
   const p = live.people.find((x) => x.id === query.get('who')) || live.people[0];
   if (!p) return null;
   const rows = [

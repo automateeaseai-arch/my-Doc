@@ -66,14 +66,18 @@ let scope = 'app';
 let current = null;
 const authSubs = new Set();
 const sessionKey = () => 'mydoc.session.' + scope;
+// Each browser tab is its own watch (so several simulated watches can run side by side).
+const sessionStore = () => (scope === 'watch' ? sessionStorage : localStorage);
+const readSession = () => { try { return JSON.parse(sessionStore().getItem(sessionKey())); } catch { return null; } };
+const writeSession = (uid) => { try { sessionStore().setItem(sessionKey(), JSON.stringify(uid)); } catch { /* blocked */ } };
 const authReload = () => {
-  const uid = read(sessionKey(), null);
+  const uid = readSession();
   const users = read(USERS_KEY, {});
   const u = uid && Object.values(users).find((x) => x.uid === uid);
   const next = u ? { uid: u.uid, name: u.name, email: u.email, anon: !!u.anon } : null;
   if (JSON.stringify(next) !== JSON.stringify(current)) { current = next; authSubs.forEach((f) => f(current)); }
 };
-const setSession = (uid) => { write(sessionKey(), uid); authReload(); chan && chan.postMessage('auth'); };
+const setSession = (uid) => { writeSession(uid); authReload(); chan && chan.postMessage('auth'); };
 
 const hash = async (s) => {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mydoc:' + s));

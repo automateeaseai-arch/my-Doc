@@ -2,6 +2,7 @@
 // It writes exactly what a real watch app would write, so the phone app can't tell the difference.
 import * as be from '../backend/index.js';
 import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins } from '../health.js';
+import { startLive } from '../live.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -41,7 +42,7 @@ export const SCENARIOS = {
 
 let st = { ready: false, uid: null, code: null, pid: null, patient: null, today: {}, linked: false, lost: false, ...load() };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; save({ code: st.code, pid: st.pid, setup: st.setup, profile: st.profile, auto: st.auto, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
+const set = (patch) => { st = { ...st, ...patch }; save({ code: st.code, pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
 export const getSim = () => st;
 export const onSim = (f) => { subs.add(f); return () => subs.delete(f); };
 export const setOption = (patch) => set(patch);
@@ -55,7 +56,7 @@ export async function startSim() {
   be.onAuth(async (u) => {
     if (!u) { await be.signInAnon(); return; }
     set({ uid: u.uid, ready: true });
-    if (st.pid) follow(); else if (st.setup && st.setup.done) newCode();
+    if (st.carer) startCarer(); else if (st.pid) follow(); else if (st.setup && st.setup.done) newCode();
   });
   setInterval(tick, 60000);
   setInterval(checkDoses, 20000);
@@ -65,10 +66,16 @@ export async function startSim() {
 async function newCode() {
   stop();
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  await be.setDoc('codes/' + code, { watchUid: st.uid, createdAt: Date.now(), battery: st.battery, setup: { self: true, conds: st.setup.conds } });
-  set({ code, pid: null, patient: null, linked: false, lost: false });
+  const role = st.setup.role || 'patient';
+  await be.setDoc('codes/' + code, { watchUid: st.uid, createdAt: Date.now(), role, battery: st.battery, ...(role === 'patient' ? { setup: { self: true, conds: st.setup.conds } } : {}) });
+  set({ code, pid: null, carer: null, patient: null, linked: false, lost: false });
   stops.push(be.watchDoc('codes/' + code, (c) => {
     if (c && c.pid) { set({ pid: c.pid, linked: true }); be.deleteDoc('codes/' + code).catch(() => {}); follow(true); }
+    if (c && c.carerUid) {
+      set({ carer: { uid: c.carerUid, name: c.carerName, carers: [...new Set([...(c.carers || []), st.uid])] }, linked: true });
+      be.deleteDoc('codes/' + code).catch(() => {});
+      startCarer();
+    }
   }));
 }
 
@@ -84,13 +91,27 @@ function follow(justLinked) {
 
 // First-time setup on the watch (designs: who wears it, then myself + conditions).
 export async function finishSetup(conds) {
-  set({ setup: { done: true, self: true, conds } });
+  set({ setup: { done: true, role: 'patient', self: true, conds } });
   await newCode();
+}
+export async function finishCarerSetup() {
+  set({ setup: { done: true, role: 'carer' } });
+  await newCode();
+}
+
+// Caregiver watch: the same live data as the caregiver's phone (see live.js).
+let carerStarted = false;
+function startCarer() {
+  stop();
+  if (carerStarted) return;
+  carerStarted = true;
+  startLive({ asCarer: st.carer });
 }
 export function resetWatch() {
   if (st.pid && st.patient) be.updateDoc('patients/' + st.pid, { watchUid: null }).catch(() => {});
   stop();
-  set({ setup: null, code: null, pid: null, patient: null, linked: false, lost: false, seenLinked: false });
+  set({ setup: null, code: null, pid: null, carer: null, patient: null, linked: false, lost: false, seenLinked: false });
+  if (carerStarted) location.reload(); // drop the caregiver's live data
 }
 
 export async function unlink() {

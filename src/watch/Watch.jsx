@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, unlink, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, resetWatch, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, unlink, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, resetWatch, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS } from '../health.js';
+import CarerFace from './Carer.jsx';
 
 const THEMES = {
   light: { bg: '#FFFFFF', fg: '#14202B', muted: '#5B6672', raised: '#FFFFFF', line: '#EEF0F2', logo: '#D62839', teal: '#0B7A75', red: '#D62839', tealTint: '#E3F5F3', tealInk: '#075955', shadow: '0 4px 12px rgba(20,32,43,0.10)', box: '#F5F7F8', boxLine: '#E4E8EC', ring: '#FDECEE' },
@@ -41,7 +42,7 @@ function Setup({ t }) {
       <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
       <span style={s('font-family: Marcellus, serif; font-size: 14px; text-align: center; letter-spacing: 0.3px')}>WHO WEARS THIS WATCH?</span>
       <button type="button" onClick={() => setStep('setup')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>I'M THE PATIENT</span><span style={s('font-size: 10px; font-weight: 600')}>Track my health and medicine</span></button>
-      <button type="button" onClick={() => setNote('The caregiver watch is coming next.')} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>I'M A CAREGIVER</span><span style={{ fontSize: 10, color: t.muted }}>{note || 'Look after other people'}</span></button>
+      <button type="button" onClick={finishCarerSetup} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>I'M A CAREGIVER</span><span style={{ fontSize: 10, color: t.muted }}>Look after other people</span></button>
     </div>
   );
   return (
@@ -87,18 +88,20 @@ function Face({ st, t }) {
     </div>
   );
 
-  if (!st.pid && !(st.setup && st.setup.done)) return <Setup t={t} />;
+  if (!st.pid && !st.carer && !(st.setup && st.setup.done)) return <Setup t={t} />;
+  if (st.carer) return <CarerFace st={st} tBase={t} />;
+  const carerCode = st.setup && st.setup.role === 'carer';
 
   if (!st.pid || !p) {
     const code = st.code || '······';
     return (
       <div style={face(t, 'padding: 8px 14px 12px; gap: 6px')} aria-label={'Linking code ' + code}>
         <WLogo t={t} />
-        <span style={s('font-family: Marcellus, serif; font-size: 14px; letter-spacing: 0.3px')}>LINK THIS WATCH</span>
+        <span style={s('font-family: Marcellus, serif; font-size: 14px; letter-spacing: 0.3px')}>{carerCode ? 'LINK TO YOUR PHONE' : 'LINK THIS WATCH'}</span>
         <span style={s('display: flex; gap: 4px; margin-top: 4px')}>
           {code.split('').map((n, i) => <span key={i} style={{ ...s('width: 24px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800'), background: t.box, border: '1px solid ' + t.boxLine, marginRight: i === 2 ? 6 : 0 }}>{n}</span>)}
         </span>
-        <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted, marginTop: 4 }}>Type this code on your caregiver's phone so they can look after you.</span>
+        <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted, marginTop: 4 }}>{carerCode ? 'On your phone open myDoc › Profile › Pair a watch and type this code.' : "Type this code on your caregiver's phone or watch so they can look after you."}</span>
         <div style={s('flex-grow: 1')} />
         <span style={{ ...s('display: flex; align-items: center; gap: 6px; font-size: 10px'), color: t.muted }}>Waiting <span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
       </div>
@@ -285,9 +288,12 @@ export default function WatchPage() {
         </div>
         <div style={s('display: flex; justify-content: space-between; gap: 12px; font-size: 14px')}>
           <span style={s('color: #5B6672')}>Status</span>
-          <span style={s('font-weight: 600; text-align: right')}>{!st.ready ? 'Starting…' : p ? `Linked to ${p.name}` : st.lost ? 'Unlinked' : !(st.setup && st.setup.done) ? 'Setting up the watch' : 'Waiting for the code to be typed'}</span>
+          <span style={s('font-weight: 600; text-align: right')}>{!st.ready ? 'Starting…' : st.carer ? `Caregiver watch of ${st.carer.name}` : p ? `Linked to ${p.name}` : st.lost ? 'Unlinked' : !(st.setup && st.setup.done) ? 'Setting up the watch' : 'Waiting for the code to be typed'}</span>
         </div>
 
+        {st.carer ? (
+          <div style={s('font-size: 13px; line-height: 1.5; color: #5B6672')}>This is the caregiver's own watch. To make readings and alerts appear on it, open another watch simulator as a patient (another tab or phone) and use its test buttons.</div>
+        ) : <>
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
           <span style={s(label)}>Health profile</span>
           <select id="sim-profile" value={st.profile} onChange={(e) => setOption({ profile: e.target.value })} style={s('height: 44px; border: 1.5px solid #D5DBE0; border-radius: 12px; padding: 0 10px; font-size: 15px; font-family: inherit; background: #FFFFFF; color: #14202B')}>
@@ -317,6 +323,7 @@ export default function WatchPage() {
           <input id="sim-battery" type="range" min="5" max="100" step="1" value={st.battery || 80} onChange={(e) => setOption({ battery: Number(e.target.value) })} onPointerUp={(e) => setBattery(Number(e.target.value))} onKeyUp={(e) => setBattery(Number(e.target.value))} />
         </div>
 
+        </>}
         <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
           <button type="button" onClick={() => setOption({ theme: st.theme === 'dark' ? 'light' : 'dark' })} style={s(btn)}>{st.theme === 'dark' ? 'Light watch face' : 'Dark watch face'}</button>
           {p && <button type="button" onClick={unlink} style={s(btn + '; color: #A81C2B')}>Unlink this watch</button>}
