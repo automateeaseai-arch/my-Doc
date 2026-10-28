@@ -12,6 +12,10 @@ npm run dev      # http://localhost:5173
 npm run build    # static files in dist/
 ```
 
+## Publish
+
+`tools/deploy-pages.sh` builds the app and pushes it to the `gh-pages` branch, served by GitHub Pages at https://automateeaseai-arch.github.io/my-Doc/ (Settings → Pages → Deploy from a branch → gh-pages).
+
 ## Code map (`src/`)
 
 | File | What it does |
