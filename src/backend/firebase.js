@@ -49,5 +49,19 @@ export const updateDoc = (path, data) => fUpdate(doc(db, path), data);
 export const addDoc = async (col, data) => (await fAdd(collection(db, col), data)).id;
 export const deleteDoc = (path) => fDelete(doc(db, path));
 export const getCol = async (col, o) => (await getDocs(q(col, o))).docs.map(snap);
-export const watchDoc = (path, cb) => onSnapshot(doc(db, path), (s) => cb(snap(s)), () => cb(null));
-export const watchCol = (col, o, cb) => onSnapshot(q(col, o), (s) => cb(s.docs.map(snap)), () => cb([]));
+// A listener started just after its parent document was created can be refused
+// before the server has saved that document, so refused listeners try again.
+const keepWatching = (start, onFail) => {
+  let stop = () => {}, timer, closed = false, wait = 1000;
+  const run = () => {
+    stop = start((e) => {
+      console.warn('myDoc: cannot read yet', e.code);
+      onFail();
+      if (!closed && e.code === 'permission-denied' && wait <= 32000) { timer = setTimeout(run, wait); wait *= 2; }
+    });
+  };
+  run();
+  return () => { closed = true; clearTimeout(timer); stop(); };
+};
+export const watchDoc = (path, cb) => keepWatching((fail) => onSnapshot(doc(db, path), (s) => cb(snap(s)), fail), () => cb(null));
+export const watchCol = (col, o, cb) => keepWatching((fail) => onSnapshot(q(col, o), (s) => cb(s.docs.map(snap)), fail), () => cb([]));
