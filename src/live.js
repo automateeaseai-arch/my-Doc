@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import * as be from './backend/index.js';
 import { METRICS, ORDER, AVATARS, statusOf, showValue, doseStatus, dayKey, daysBack, when, initials } from './health.js';
 
-let state = { ready: false, user: null, raw: [], logs: {}, alerts: {} };
+let state = { ready: false, user: null, profile: null, raw: [], logs: {}, alerts: {} };
 const subs = new Set();
 const set = (patch) => { state = { ...state, ...patch }; derived = null; subs.forEach((f) => f()); };
 let derived = null;
@@ -16,8 +16,11 @@ export function startLive() {
   be.onAuth((user) => {
     stopAll.forEach((f) => f()); stopAll = [];
     perPatient.forEach((fs) => fs.forEach((f) => f())); perPatient.clear();
-    set({ user, raw: [], logs: {}, alerts: {}, ready: !user });
+    set({ user, profile: null, raw: [], logs: {}, alerts: {}, ready: !user });
     if (!user || user.anon) return;
+    const loaded = { people: false, profile: false };
+    const done = () => loaded.people && loaded.profile;
+    stopAll.push(be.watchDoc('users/' + user.uid, (d) => { loaded.profile = true; set({ profile: d || {}, ready: done() }); }));
     stopAll.push(be.watchCol('patients', { where: ['carers', 'array-contains', user.uid] }, (rows) => {
       rows.sort((a, b) => (a.created || 0) - (b.created || 0));
       for (const p of rows) {
@@ -28,7 +31,8 @@ export function startLive() {
         ]);
       }
       for (const [pid, fs] of perPatient) if (!rows.find((r) => r.id === pid)) { fs.forEach((f) => f()); perPatient.delete(pid); }
-      set({ raw: rows, ready: true });
+      loaded.people = true;
+      set({ raw: rows, ready: done() });
     }));
   });
 }
@@ -116,6 +120,12 @@ export async function createPerson({ name, self, conds, contacts, autoAlert, pho
   });
   return id;
 }
+// The caregiver's own details (phone sign-up step "About you").
+export async function saveProfile(data) {
+  await be.setDoc('users/' + me().uid, { ...data, updated: Date.now() }, { merge: true });
+  if (data.name) await be.setName(data.name);
+}
+
 export const updatePerson = (id, patch) => be.updateDoc('patients/' + id, patch);
 export async function removePerson(id) { await be.deleteDoc('patients/' + id); }
 
@@ -144,7 +154,10 @@ export async function linkWatch(code, p) {
   const c = await be.getDoc('codes/' + code);
   if (!c || !c.watchUid) { const e = new Error('no-code'); e.code = 'no-code'; throw e; }
   if (Date.now() - (c.createdAt || 0) > 30 * 60 * 1000) { const e = new Error('expired'); e.code = 'expired'; throw e; }
-  await be.updateDoc('patients/' + p.id, { watchUid: c.watchUid, watchInfo: { battery: c.battery ?? 100, lastSeen: Date.now() } });
+  // Conditions the patient chose on the watch during its setup are added to the person.
+  const fromWatch = (c.setup && c.setup.conds) || [];
+  const conds = [...new Set([...(p.conds || []), ...fromWatch])];
+  await be.updateDoc('patients/' + p.id, { watchUid: c.watchUid, conds, watchInfo: { battery: c.battery ?? 100, lastSeen: Date.now() } });
   await be.updateDoc('codes/' + code, { pid: p.id, carerName: me().name || 'Your caregiver', personName: p.name });
 }
 export async function unlinkWatch(p) { await be.updateDoc('patients/' + p.id, { watchUid: null }); }

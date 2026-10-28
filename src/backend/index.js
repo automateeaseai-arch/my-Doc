@@ -2,7 +2,7 @@
 import { firebaseConfig } from './config.js';
 import * as local from './local.js';
 
-export const online = !!firebaseConfig.apiKey;
+export const online = !!firebaseConfig.apiKey && !import.meta.env.VITE_LOCAL; // VITE_LOCAL=1 builds a this-phone-only copy for testing
 let impl = local;
 
 // Call once at start-up with 'app' (phone app) or 'watch' (watch simulator).

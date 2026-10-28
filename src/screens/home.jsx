@@ -78,6 +78,9 @@ export function Home() {
             <I.chev />
           </A>
         )}
+        {live.profile && !live.profile.aboutDone && (
+          <A to="/about" style="display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; text-decoration: none; font-size: 13px; font-weight: 600">Add your phone number and details<span style={s('flex-grow: 1')} /><I.chev color="#8A5300" /></A>
+        )}
         <div style={s('display: flex; flex-direction: column; gap: 2px')}>
           <div style={s('font-size: 14px; color: #5B6672')}>{greeting()}{live.user && live.user.name ? ', ' + live.user.name.split(' ')[0] : ''}</div>
           <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>People you care for</h1>
@@ -233,8 +236,6 @@ export function Profile() {
   const set = st.settings;
   const setSetting = (k, v) => update((x) => ({ settings: { ...x.settings, [k]: v } }));
   const [armed, twoTap] = useTwoTap();
-  const [editName, setEditName] = useState(false);
-  const [nm, setNm] = useState((live.user && live.user.name) || '');
   const al = [
     ['range', 'Readings out of range', 'High or low sugar, blood pressure, heart rate'],
     ['doses', 'Missed doses', '30 minutes after a dose is due'],
@@ -245,6 +246,7 @@ export function Profile() {
   const signOut = async () => { await be.signOut(); go('/welcome'); };
   const sel = live.people[Math.min(st.sel, live.people.length - 1)];
   const u = live.user || {};
+  const pr = live.profile || {};
   const notif = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
   return (
     <div style={s('min-height: 100dvh; background: #F5F7F8; display: flex; flex-direction: column')}>
@@ -254,16 +256,11 @@ export function Profile() {
           <Logo />
         </div>
         <div style={s('display: flex; align-items: center; gap: 14px; padding: 16px; background: #FFFFFF; border-radius: 24px; box-shadow: 0 6px 20px rgba(20,32,43,0.06)')}>
-          <span style={s('width: 64px; height: 64px; flex-shrink: 0; border-radius: 22px; background: #0B7A75; color: #FFFFFF; font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center')}>{(u.name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
-          {editName ? (
-            <form onSubmit={async (e) => { e.preventDefault(); if (!nm.trim()) return; await be.setName(nm.trim()); setEditName(false); toast('Saved'); }} style={s('display: flex; gap: 8px; flex-grow: 1; min-width: 0')}>
-              <input aria-label="Your name" value={nm} onChange={(e) => setNm(e.target.value)} autoFocus style={s('flex-grow: 1; min-width: 0; height: 40px; border: 1.5px solid #0B7A75; border-radius: 12px; padding: 0 12px; font-size: 15px; font-family: inherit')} />
-              <button type="submit" style={s('height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: #0B7A75; color: #FFFFFF; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer')}>Save</button>
-            </form>
-          ) : <>
-            <span style={s('display: flex; flex-direction: column; flex-grow: 1; min-width: 0')}><span style={s('font-size: 18px; font-weight: 700')}>{u.name || 'Caregiver'}</span><span style={s('font-size: 13px; color: #5B6672; overflow-wrap: anywhere')}>{u.email}</span><span style={s('font-size: 12px; color: #5B6672')}>{be.online ? 'Synced online' : 'Test mode · this phone only'}</span></span>
-            <button type="button" onClick={() => setEditName(true)} style={s('height: 36px; padding: 0 14px; border: 1.5px solid #0B7A75; border-radius: 12px; background: #FFFFFF; color: #0B7A75; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer')}>Edit</button>
-          </>}
+          <span style={s('width: 64px; height: 64px; flex-shrink: 0; border-radius: 22px; background: #0B7A75; color: #FFFFFF; font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center')}>{(pr.name || u.name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+          <>
+            <span style={s('display: flex; flex-direction: column; flex-grow: 1; min-width: 0')}><span style={s('font-size: 18px; font-weight: 700')}>{pr.name || u.name || 'Caregiver'}</span><span style={s('font-size: 13px; color: #5B6672')}>{{ self: 'Tracking my health', both: 'Caregiver and patient' }[pr.use] || 'Caregiver'}{pr.city ? ' · ' + pr.city : ''}</span><span style={s('font-size: 13px; color: #5B6672; overflow-wrap: anywhere')}>{pr.phone || u.email}</span></span>
+            <button type="button" onClick={() => go('/about')} style={s('height: 36px; padding: 0 14px; border: 1.5px solid #0B7A75; border-radius: 12px; background: #FFFFFF; color: #0B7A75; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer')}>Edit</button>
+          </>
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>

@@ -7,6 +7,11 @@ service cloud.firestore {
     function isWatch(d) { return signedIn() && d.watchUid == request.auth.uid; }
     function patient(pid) { return get(/databases/$(database)/documents/patients/$(pid)).data; }
 
+    // Each caregiver's own details: only they can read or change them.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
     match /patients/{pid} {
       allow create: if signedIn() && request.auth.uid in request.resource.data.carers;
       allow read: if isCarer(resource.data) || isWatch(resource.data);

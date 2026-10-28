@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, unlink, takeDose, sendSOS, clearPing, onDoseDue, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, unlink, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, resetWatch, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { CONDITIONS } from '../health.js';
 
 const THEMES = {
   light: { bg: '#FFFFFF', fg: '#14202B', muted: '#5B6672', raised: '#FFFFFF', line: '#EEF0F2', logo: '#D62839', teal: '#0B7A75', red: '#D62839', tealTint: '#E3F5F3', tealInk: '#075955', shadow: '0 4px 12px rgba(20,32,43,0.10)', box: '#F5F7F8', boxLine: '#E4E8EC', ring: '#FDECEE' },
@@ -21,6 +22,45 @@ const Back = ({ t, onClick }) => <button type="button" aria-label="Back" onClick
 
 const face = (t, extra = '') => ({ ...s('width: 198px; height: 242px; box-sizing: border-box; font-family: Poppins, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; text-align: center; ' + extra), background: t.bg, color: t.fg });
 const wbtn = 'display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; border: 0; cursor: pointer; font-family: inherit; text-decoration: none; box-sizing: border-box';
+
+// ---- first-time setup (designs: WLoading → WRole → WSetup) ---------------------------
+
+function Setup({ t }) {
+  const [step, setStep] = useState('splash');
+  const [conds, setConds] = useState({});
+  const [note, setNote] = useState('');
+  const any = Object.values(conds).some(Boolean);
+  if (step === 'splash') return (
+    <button type="button" aria-label="myDoc. Tap to start" onClick={() => setStep('role')} style={{ ...face(t, 'justify-content: center; gap: 18px; border: 0; cursor: pointer; padding: 0'), font: 'inherit' }}>
+      <span className="md-pop" style={{ ...s("display: flex; align-items: baseline; gap: 2px; font-family: 'Kaushan Script', cursive; line-height: 1; text-shadow: 0 3px 6px rgba(214,40,57,0.22)"), color: t.logo }}><span style={{ fontSize: 22 }}>my</span><span style={{ fontSize: 52 }}>DOC</span></span>
+      <span style={{ fontSize: 10, color: t.muted }}>Tap to start</span>
+    </button>
+  );
+  if (step === 'role') return (
+    <div style={face(t, 'padding: 8px 14px 12px; gap: 8px; align-items: stretch; text-align: left')}>
+      <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
+      <span style={s('font-family: Marcellus, serif; font-size: 14px; text-align: center; letter-spacing: 0.3px')}>WHO WEARS THIS WATCH?</span>
+      <button type="button" onClick={() => setStep('setup')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>I'M THE PATIENT</span><span style={s('font-size: 10px; font-weight: 600')}>Track my health and medicine</span></button>
+      <button type="button" onClick={() => setNote('The caregiver watch is coming next.')} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>I'M A CAREGIVER</span><span style={{ fontSize: 10, color: t.muted }}>{note || 'Look after other people'}</span></button>
+    </div>
+  );
+  return (
+    <div style={{ ...face(t, 'padding: 8px 14px 10px; gap: 4px; align-items: stretch; text-align: left; overflow-y: auto'), scrollbarWidth: 'none' }}>
+      <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
+      <div style={s('display: flex; align-items: center; justify-content: space-between; min-height: 28px')}><span style={s('font-size: 14px; font-weight: 800; letter-spacing: 0.3px')}>MYSELF</span><span aria-label="Myself, selected" style={{ ...s('width: 22px; height: 22px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center'), background: t.fg, color: t.bg }}><Tick size={14} color={t.bg} /></span></div>
+      <button type="button" onClick={() => setNote('Photos come in a later version.')} style={{ ...s('display: flex; align-items: center; min-height: 24px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 14px; font-weight: 800; letter-spacing: 0.3px; cursor: pointer'), color: t.teal }}>IMPORT PICTURE</button>
+      {note && <span style={{ fontSize: 9, color: t.muted }}>{note}</span>}
+      <span style={s('font-size: 14px; font-weight: 800; letter-spacing: 0.3px; margin-top: 2px')}>CHOOSE CONDITION</span>
+      <div style={s('display: flex; flex-direction: column; gap: 5px')}>
+        {CONDITIONS.map((c) => {
+          const on = !!conds[c];
+          return <button key={c} type="button" aria-pressed={on} onClick={() => setConds({ ...conds, [c]: !on })} style={{ ...s('flex-shrink: 0; height: 24px; border-radius: 9px; font-size: 10px; font-weight: 700; font-family: inherit; letter-spacing: 0.2px; cursor: pointer'), background: on ? '#2BB5B0' : 'transparent', color: on ? '#14202B' : t.fg, border: '1.5px solid ' + (on ? '#2BB5B0' : t.line) }}>{c.toUpperCase().replace(' / ', '/')}</button>;
+        })}
+      </div>
+      <button type="button" disabled={!any} onClick={() => finishSetup(CONDITIONS.filter((c) => conds[c]))} style={{ ...s('flex-shrink: 0; display: flex; align-items: center; justify-content: center; height: 34px; margin-top: 6px; font-size: 24px; font-weight: 800; letter-spacing: 0.5px; border: 0; background: transparent; font-family: inherit; cursor: pointer'), color: any ? t.teal : t.muted }}>DONE ...</button>
+    </div>
+  );
+}
 
 // ---- the watch face --------------------------------------------------------------
 
@@ -46,6 +86,8 @@ function Face({ st, t }) {
       <button type="button" onClick={unlink} style={s(wbtn + '; height: 34px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>GET A NEW CODE</button>
     </div>
   );
+
+  if (!st.pid && !(st.setup && st.setup.done)) return <Setup t={t} />;
 
   if (!st.pid || !p) {
     const code = st.code || '······';
@@ -243,7 +285,7 @@ export default function WatchPage() {
         </div>
         <div style={s('display: flex; justify-content: space-between; gap: 12px; font-size: 14px')}>
           <span style={s('color: #5B6672')}>Status</span>
-          <span style={s('font-weight: 600; text-align: right')}>{!st.ready ? 'Starting…' : p ? `Linked to ${p.name}` : st.lost ? 'Unlinked' : 'Waiting for the code to be typed'}</span>
+          <span style={s('font-weight: 600; text-align: right')}>{!st.ready ? 'Starting…' : p ? `Linked to ${p.name}` : st.lost ? 'Unlinked' : !(st.setup && st.setup.done) ? 'Setting up the watch' : 'Waiting for the code to be typed'}</span>
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
@@ -278,6 +320,7 @@ export default function WatchPage() {
         <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
           <button type="button" onClick={() => setOption({ theme: st.theme === 'dark' ? 'light' : 'dark' })} style={s(btn)}>{st.theme === 'dark' ? 'Light watch face' : 'Dark watch face'}</button>
           {p && <button type="button" onClick={unlink} style={s(btn + '; color: #A81C2B')}>Unlink this watch</button>}
+          <button type="button" onClick={resetWatch} style={s(btn)}>Start setup again</button>
         </div>
         <a href="./" style={s('font-size: 14px; font-weight: 600; color: #0B7A75')}>Open the myDoc phone app</a>
       </section>

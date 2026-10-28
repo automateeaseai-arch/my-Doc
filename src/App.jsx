@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useRoute, Toasts, toast, go } from './ui.jsx';
 import { useStore } from './store.js';
 import { useLive } from './live.js';
-import { Splash, Welcome, SignIn, SignUp, Setup, Pair, Paired } from './screens/start.jsx';
+import { Splash, Welcome, SignIn, SignUp, About, Setup, Pair, Paired } from './screens/start.jsx';
 import { Home, Alerts, Summary, Profile } from './screens/home.jsx';
 import { Vitals, Reading, Call, Locate, Sent, Meds, Serotonin } from './screens/person.jsx';
 
@@ -17,6 +17,7 @@ function screen(route, live) {
     return <Welcome />;
   }
   switch (parts[0]) {
+    case 'about': return <About key={route} query={query} />;
     case 'setup': return <Setup key={route} query={query} />;
     case 'pair': return <Pair key={route} query={query} />;
     case 'paired': return <Paired query={query} />;

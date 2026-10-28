@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { s, A, Logo, Back, Toggle, Seg, I, btn, section, go, toast } from '../ui.jsx';
 import { update } from '../store.js';
-import { useLive, createPerson, updatePerson, removePerson, linkWatch } from '../live.js';
+import { useLive, createPerson, updatePerson, removePerson, linkWatch, saveProfile } from '../live.js';
 import * as be from '../backend/index.js';
 import { CONDITIONS, initials } from '../health.js';
 
@@ -128,9 +128,9 @@ export function SignUp() {
     if (!emailOk(email)) return setErr('Check the email address.');
     if (pw.length < 6) return setErr('Use at least 6 characters for the password.');
     setBusy(true); setErr('');
-    try { await be.signUp({ name, email, password: pw }); go('/setup?first=1'); } catch (x) { setErr(be.authMessage(x)); } finally { setBusy(false); }
+    try { await be.signUp({ name, email, password: pw }); go('/about?first=1'); } catch (x) { setErr(be.authMessage(x)); } finally { setBusy(false); }
   };
-  const google = async () => { setErr(''); try { await be.signInGoogle(); go('/setup?first=1'); } catch (x) { setErr(be.authMessage(x)); } };
+  const google = async () => { setErr(''); try { await be.signInGoogle(); go('/about?first=1'); } catch (x) { setErr(be.authMessage(x)); } };
   return (
     <AuthFrame title="Create your account" sub="It takes a minute. Then add the first person you care for." onSubmit={submit}>
       <div style={s('display: flex; flex-direction: column; gap: 6px; margin-top: 8px')}>
@@ -156,13 +156,77 @@ export function SignUp() {
   );
 }
 
+// The caregiver's own details, right after creating the account (also Profile → Edit).
+export function About({ query }) {
+  const live = useLive();
+  const first = query.get('first');
+  const pr = live.profile || {};
+  const [name, setName] = useState(pr.name || (live.user && live.user.name) || '');
+  const [phone, setPhone] = useState(pr.phone || '');
+  const [city, setCity] = useState(pr.city || '');
+  const [use, setUse] = useState(pr.use || 'others');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const small = 'height: 48px; border: 1.5px solid #E4E8EC; border-radius: 14px; padding: 0 14px; font-size: 16px; font-family: inherit; color: #14202B; background: #FFFFFF; width: 100%; box-sizing: border-box';
+  const lab = 'font-size: 13px; font-weight: 600';
+  const save = async () => {
+    if (!name.trim()) return setErr('Type your name.');
+    if (phone.replace(/\D/g, '').length < 7) return setErr('Type your phone number, so the people you care for and their contacts can reach you.');
+    setBusy(true); setErr('');
+    try {
+      await saveProfile({ name: name.trim(), phone: phone.trim(), city: city.trim(), use, aboutDone: true });
+      if (first) go(use === 'self' ? '/setup?first=1&who=self' : '/setup?first=1'); else { toast('Saved'); go('/profile'); }
+    } catch { setErr('Could not save. Check your internet connection and try again.'); } finally { setBusy(false); }
+  };
+  const opt = (k, title, sub) => (
+    <button type="button" aria-pressed={use === k} onClick={() => setUse(k)} style={s('display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 16px; text-align: left; font-family: inherit; cursor: pointer; ' + (use === k ? 'background: #E3F5F3; border: 1.5px solid #0B7A75; color: #14202B' : 'background: #FFFFFF; border: 1.5px solid #D5DBE0; color: #14202B'))}>
+      <span style={s('font-size: 15px; font-weight: 700')}>{title}</span><span style={s('font-size: 12px; color: #5B6672')}>{sub}</span>
+    </button>
+  );
+  return (
+    <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 14px')}>
+      <div style={s('display: flex; align-items: center; justify-content: space-between; height: 44px')}>
+        {first ? <span style={s('width: 44px')} /> : <Back to="/profile" />}
+        <Logo />
+        <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{first ? 'Step 1' : ''}</div>
+      </div>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{first ? 'About you' : 'Your details'}</h1>
+      <p style={s('margin: -6px 0 0; font-size: 14px; color: #5B6672; line-height: 1.5')}>The people you look after, and their emergency contacts, see these details.</p>
+      <div style={s('display: flex; align-items: center; gap: 14px')}>
+        <button type="button" aria-label="Add a photo" onClick={() => toast('Photos come in a later version')} style={s('width: 64px; height: 64px; flex-shrink: 0; border-radius: 32px; border: 0; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative')}><I.camera /><span style={s('position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 11px; background: #0B7A75; color: #FFFFFF; border: 2px solid #FFFFFF; font-size: 16px; line-height: 20px; font-weight: 600')}>+</span></button>
+        <div style={s('display: flex; flex-direction: column; gap: 4px; flex-grow: 1; min-width: 0')}>
+          <label htmlFor="ab-name" style={s(lab)}>Your name</label>
+          <input id="ab-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} style={s(small)} />
+        </div>
+      </div>
+      <div style={s('display: flex; flex-direction: column; gap: 4px')}>
+        <label htmlFor="ab-phone" style={s(lab)}>Phone number</label>
+        <input id="ab-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0809 000 0000" value={phone} onChange={(e) => setPhone(e.target.value)} style={s(small)} />
+      </div>
+      <div style={s('display: flex; flex-direction: column; gap: 4px')}>
+        <label htmlFor="ab-city" style={s(lab)}>City or town</label>
+        <input id="ab-city" autoComplete="address-level2" placeholder="e.g. Lagos" value={city} onChange={(e) => setCity(e.target.value)} style={s(small)} />
+      </div>
+      <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+        <span style={s(section)}>How will you use myDoc?</span>
+        {opt('others', 'Look after someone', 'A parent, grandparent, friend or patient')}
+        {opt('self', 'Track my own health', 'My readings and medicine, on my own watch')}
+        {opt('both', 'Both', 'Myself and people I look after')}
+      </div>
+      <Err msg={err} />
+      <div style={s('flex-grow: 1')} />
+      <button type="button" disabled={busy} onClick={save} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Saving…' : first ? 'Next' : 'Save'}</button>
+    </main>
+  );
+}
+
 // Set up (or edit) a person: name, conditions, emergency contacts.
 export function Setup({ query }) {
   const live = useLive();
   const editId = query.get('edit');
   const first = query.get('first');
   const editing = live.people.find((p) => p.id === editId);
-  const [who, setWho] = useState(editing ? (editing.self ? 'self' : 'other') : 'other');
+  const [who, setWho] = useState(editing ? (editing.self ? 'self' : 'other') : query.get('who') === 'self' ? 'self' : 'other');
   const [name, setName] = useState(editing ? editing.name : '');
   const [pronoun, setPronoun] = useState(editing ? editing.pronoun || '' : '');
   const [phone, setPhone] = useState(editing ? editing.phone || '' : '');
