@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { s, A, Logo, Back, Toggle, Seg, I, btn, section, go, toast } from '../ui.jsx';
 import { update } from '../store.js';
-import { useLive, updatePerson, stopMonitoring, linkCarerWatch, readCode, requestLink, saveProfile } from '../live.js';
+import { useLive, updatePerson, stopMonitoring, linkCarerWatch, readCode, requestLink, replaceWatch, saveProfile } from '../live.js';
 import * as be from '../backend/index.js';
 import { CONDITIONS, initials } from '../health.js';
 
@@ -333,6 +333,7 @@ export function Setup({ query }) {
       </div>
       <div style={s('flex-grow: 1')} />
       <button type="button" disabled={busy} onClick={done} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Saving…' : editing ? 'Save' : 'Next'}</button>
+      {editing && <A to={'/add?replace=' + editing.id} style={btn.outline}>Replace {editing.self ? 'my' : editing.her || 'their'} watch</A>}
       {editing && <button type="button" onClick={del} style={s('height: 44px; border: 0; background: transparent; color: #A81C2B; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer')}>{confirmDel ? 'Tap again to stop monitoring ' + editing.name : 'Stop monitoring ' + editing.name}</button>}
     </main>
   );
@@ -358,6 +359,8 @@ export function Pair({ query, mode = 'watch' }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(null);
+  const [replacing, setReplacing] = useState(null); // { code, c } for a replacement watch
+  const [pick, setPick] = useState(query.get('replace') || '');
   const stopRef = useRef(null);
   useEffect(() => () => stopRef.current && stopRef.current(), []);
   const setDigit = (i, v) => {
@@ -373,6 +376,7 @@ export function Pair({ query, mode = 'watch' }) {
     try {
       const c = await readCode(c6);
       if (c.role === 'carer') { await linkCarerWatch(c6, c); go('/paired?mine=1'); return; }
+      if (c.role === 'replace') { if (!live.people.length) { setErr('Nobody to move to this watch yet.'); return; } setReplacing({ code: c6, c }); if (!pick) setPick(live.people[0].id); return; }
       if (live.people.find((p) => p.id === c.pid)) { setErr('You already look after ' + (c.name || 'this person') + '.'); return; }
       setWaiting(c.name || 'them');
       stopRef.current = await requestLink(c6, c, (r) => {
@@ -384,6 +388,34 @@ export function Pair({ query, mode = 'watch' }) {
     } finally { setBusy(false); }
   };
   const add = mode === 'add';
+  if (replacing) {
+    const p = live.people.find((x) => x.id === pick) || live.people[0];
+    const confirm = async () => {
+      setBusy(true); setErr('');
+      try { await replaceWatch(replacing.code, replacing.c, p); toast(p.name + "'s new watch is ready"); go('/p/' + p.id + '/vitals'); }
+      catch { setErr('Could not move them. Check your internet connection.'); } finally { setBusy(false); }
+    };
+    return (
+      <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 14px')}>
+        <div style={s('display: flex; align-items: center; justify-content: space-between; height: 44px')}><Back to="/home" /><Logo /><span style={s('width: 44px')} /></div>
+        <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>Replace a watch</h1>
+        <p style={s('margin: -6px 0 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>This is a new watch replacing a lost or broken one. Whose is it?</p>
+        <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+          {live.people.map((q) => (
+            <button key={q.id} type="button" aria-pressed={pick === q.id} onClick={() => setPick(q.id)} style={s('display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; text-align: left; font-family: inherit; cursor: pointer; color: #14202B; ' + (p.id === q.id ? 'background: #E3F5F3; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; border: 1.5px solid #D5DBE0'))}>
+              <span style={{ ...s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 14px; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center'), background: q.bg, color: q.fg }}>{q.ini}</span>
+              <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 600')}>{q.name}</span><span style={s('font-size: 12px; color: #5B6672')}>Old watch last seen {q.lastSeen ? new Date(q.lastSeen).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never'}</span></span>
+            </button>
+          ))}
+        </div>
+        <div style={s('padding: 12px 14px; border-radius: 14px; background: #FFF1DB; color: #8A5300; font-size: 13px; line-height: 1.5')}>{p.name}'s readings, medicine and caregivers move to the new watch. The old watch stops sending.</div>
+        <Err msg={err} />
+        <div style={s('flex-grow: 1')} />
+        <button type="button" disabled={busy} onClick={confirm} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Moving…' : 'Move ' + p.name + ' to the new watch'}</button>
+        <button type="button" onClick={() => setReplacing(null)} style={s('height: 44px; border: 0; background: transparent; color: #0B7A75; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer')}>Cancel</button>
+      </main>
+    );
+  }
   if (waiting) return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 16px; text-align: center')}>
       <div style={s('width: 72px; height: 72px; border-radius: 36px; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center')}><I.watch /></div>
@@ -400,15 +432,19 @@ export function Pair({ query, mode = 'watch' }) {
         <Logo />
         <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{first ? 'Step 2' : ''}</div>
       </div>
-      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{add ? 'Add a person' : 'Pair your watch'}</h1>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{query.get('replace') ? 'Replace a watch' : add ? 'Add a person' : 'Pair your watch'}</h1>
       <div style={s('display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 20px; background: #F5F7F8')}>
         <div style={s('flex-shrink: 0; display: flex; flex-direction: column; align-items: center')}>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 5px 5px 0 0')} />
-          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>{add ? 'PAIR WITH A CAREGIVER' : 'LINK TO YOUR PHONE'}</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>••• •••</span></div></div>
+          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>{query.get('replace') ? 'REPLACING MY WATCH' : add ? 'PAIR WITH A CAREGIVER' : 'LINK TO YOUR PHONE'}</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>••• •••</span></div></div>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 0 0 5px 5px')} />
         </div>
         <ol style={s('margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: #14202B')}>
-          {add ? <>
+          {query.get('replace') ? <>
+            <li>Turn on the new watch and open myDoc.</li>
+            <li>Choose <b>I'm the patient › Replacing my watch</b>.</li>
+            <li>Type the code it shows.</li>
+          </> : add ? <>
             <li>On their watch: <b>Settings › Pair with a caregiver</b>.</li>
             <li>Type the 6-digit code it shows.</li>
             <li>They tap <b>Yes</b> on the watch.</li>
@@ -435,7 +471,7 @@ export function Pair({ query, mode = 'watch' }) {
         <Err msg={err} />
       </div>
       <div style={s('flex-grow: 1')} />
-      <button type="button" disabled={busy} onClick={submit} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Checking…' : add ? 'Send request' : 'Pair watch'}</button>
+      <button type="button" disabled={busy} onClick={submit} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Checking…' : query.get('replace') ? 'Next' : add ? 'Send request' : 'Pair watch'}</button>
       {first && <A to="/home" style="display: flex; height: 40px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; text-decoration: none; color: #0B7A75">Skip for now</A>}
     </main>
   );

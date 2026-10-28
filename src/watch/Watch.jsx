@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, resetWatch, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS, initials } from '../health.js';
 import CarerFace, { CarerUnlinked } from './Carer.jsx';
 
@@ -43,11 +43,19 @@ function Setup({ t }) {
       <span style={{ fontSize: 10, color: t.muted }}>Tap to start</span>
     </button>
   );
+  if (step === 'newold') return (
+    <div style={face(t, 'padding: 4px 14px 12px; gap: 8px; align-items: stretch; text-align: left')}>
+      <div style={s('display: flex; align-items: center; justify-content: space-between')}><Back t={t} onClick={() => setStep('role')} /><WLogo t={t} /><span style={s('width: 32px')} /></div>
+      <button type="button" onClick={() => setStep('setup')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>NEW TO MYDOC</span><span style={s('font-size: 10px; font-weight: 600')}>Set up my profile</span></button>
+      <button type="button" onClick={() => { startReplace(); setStep('replace'); }} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>REPLACING MY WATCH</span><span style={{ fontSize: 10, color: t.muted }}>Keep my history and caregivers</span></button>
+    </div>
+  );
+  if (step === 'replace') return <ReplaceCode t={t} onBack={() => setStep('newold')} />;
   if (step === 'role') return (
     <div style={face(t, 'padding: 8px 14px 12px; gap: 8px; align-items: stretch; text-align: left')}>
       <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
       <span style={s('font-family: Marcellus, serif; font-size: 14px; text-align: center; letter-spacing: 0.3px')}>WHO WEARS THIS WATCH?</span>
-      <button type="button" onClick={() => setStep('setup')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>I'M THE PATIENT</span><span style={s('font-size: 10px; font-weight: 600')}>Track my health and medicine</span></button>
+      <button type="button" onClick={() => setStep('newold')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>I'M THE PATIENT</span><span style={s('font-size: 10px; font-weight: 600')}>Track my health and medicine</span></button>
       <button type="button" onClick={finishCarerSetup} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>I'M A CAREGIVER</span><span style={{ fontSize: 10, color: t.muted }}>Look after other people</span></button>
     </div>
   );
@@ -92,6 +100,23 @@ function Setup({ t }) {
   );
 }
 
+function ReplaceCode({ t, onBack }) {
+  const st = useSim();
+  const code = st.code || '······';
+  return (
+    <div style={face(t, 'padding: 4px 14px 12px; gap: 6px')} aria-label={'Linking code ' + code}>
+      <div style={s('display: flex; width: 100%; align-items: center; justify-content: space-between')}><Back t={t} onClick={onBack} /><WLogo t={t} /><span style={s('width: 32px')} /></div>
+      <span style={s('font-family: Marcellus, serif; font-size: 14px; letter-spacing: 0.3px')}>REPLACING MY WATCH</span>
+      <span style={s('display: flex; gap: 4px; margin-top: 2px')}>
+        {code.split('').map((n, i) => <span key={i} style={{ ...s('width: 24px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800'), background: t.box, border: '1px solid ' + t.boxLine, marginRight: i === 2 ? 6 : 0 }}>{n}</span>)}
+      </span>
+      <span style={{ fontSize: 10, lineHeight: 1.4, color: t.muted, marginTop: 2 }}>Ask your caregiver to type this code in myDoc on their phone: Add a person.</span>
+      <div style={s('flex-grow: 1')} />
+      <span style={{ ...s('display: flex; align-items: center; gap: 6px; font-size: 10px'), color: t.muted }}>Waiting <span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
+    </div>
+  );
+}
+
 // ---- the watch face --------------------------------------------------------------
 
 function Face({ st, t }) {
@@ -114,8 +139,8 @@ function Face({ st, t }) {
   if (st.lost) return (
     <div style={face(t, 'padding: 12px 14px; gap: 8px')}>
       <WLogo t={t} />
-      <span style={s('font-family: Marcellus, serif; font-size: 15px; margin-top: 10px')}>NOT SET UP</span>
-      <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted }}>This watch's profile can't be found. Set it up again.</span>
+      <span style={s('font-family: Marcellus, serif; font-size: 15px; margin-top: 10px')}>{st.replaced ? 'REPLACED' : 'NOT SET UP'}</span>
+      <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted }}>{st.replaced ? 'Your profile has moved to your new watch. This one no longer sends your readings.' : "This watch's profile can't be found. Set it up again."}</span>
       <div style={s('flex-grow: 1')} />
       <button type="button" onClick={resetWatch} style={s(wbtn + '; height: 34px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>SET UP AGAIN</button>
     </div>
@@ -128,6 +153,17 @@ function Face({ st, t }) {
   const next = today.find((d) => d.st === 'due') || today.find((d) => d.st === 'missed');
   const latest = (k) => p.recent && p.recent[k] && p.recent[k][0];
   const bad = ['sugar', 'bp', 'hr', 'o2'].find((k) => latest(k) && statusOf(k, latest(k).v) !== 'Normal');
+
+  if (st.welcomeBack != null && st.welcomeBack !== '' ) return (
+    <div style={face(t, 'padding: 8px 14px 12px; gap: 6px')}>
+      <WLogo t={t} />
+      <span className="md-pop" style={s('width: 44px; height: 44px; margin-top: 8px; border-radius: 22px; background: #2BB5B0; display: flex; align-items: center; justify-content: center')}><Tick /></span>
+      <span style={s('font-family: Marcellus, serif; font-size: 16px')}>WELCOME BACK</span>
+      <span style={{ fontSize: 11, lineHeight: 1.4, color: t.muted }}>{p.name}, your history, medicine and caregivers are on this watch now.</span>
+      <div style={s('flex-grow: 1')} />
+      <button type="button" onClick={() => setOption({ welcomeBack: '' })} style={s(wbtn + '; height: 34px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>CONTINUE</button>
+    </div>
+  );
 
   // Settings (patient): pair with a caregiver, my caregivers, theme.
   if (screen === 'settings') return (

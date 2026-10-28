@@ -13,6 +13,12 @@ service cloud.firestore {
       return exists(u) ? get(u).data.get('watches', []) : [];
     }
 
+    // Moving a person to a replacement watch: the new watch must have asked (a 'replace' code).
+    function isReplacement() {
+      let c = /databases/$(database)/documents/codes/$(request.resource.data.replaceCode);
+      return exists(c) && get(c).data.role == 'replace' && get(c).data.watchUid == request.resource.data.watchUid;
+    }
+
     // Each caregiver's own details: only they can read or change them.
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
@@ -24,7 +30,8 @@ service cloud.firestore {
       allow read: if isCarer(resource.data) || isWatch(resource.data);
       // Caregivers may update, but only the watch may add caregivers (consent).
       allow update: if isWatch(resource.data)
-        || (isCarer(resource.data) && request.resource.data.watchUid == resource.data.watchUid
+        || (isCarer(resource.data)
+            && (request.resource.data.watchUid == resource.data.watchUid || isReplacement())
             && (!('carers' in request.resource.data.diff(resource.data).affectedKeys())
                 || request.resource.data.carers.hasOnly(resource.data.carers.concat(myWatches()))));
       allow delete: if isWatch(resource.data);

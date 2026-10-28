@@ -83,7 +83,7 @@ export async function finishSetup({ name, conds, contacts }) {
 function follow(fresh) {
   stop();
   stops.push(be.watchDoc('patients/' + st.pid, async (p) => {
-    if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true }); return; }
+    if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) }); return; }
     set({ patient: p, lost: false });
     if (fresh) { fresh = false; await setPlace(st.place || 0); if (!p.recent) await backfill(p); else tick(); }
   }));
@@ -133,6 +133,23 @@ export async function removeCarer(uid) {
 
 // ---- caregiver watch ------------------------------------------------------------------
 
+// A replacement watch: shows a code; a caregiver moves the person (and their history) onto it.
+export async function startReplace() {
+  stopPairing();
+  const code = newCodeNumber();
+  await be.setDoc('codes/' + code, { watchUid: st.uid, role: 'replace', createdAt: Date.now() });
+  set({ code });
+  codeStop = be.watchDoc('codes/' + code, (c) => {
+    if (c && c.pid) {
+      if (codeStop) codeStop();
+      codeStop = null;
+      be.deleteDoc('codes/' + code).catch(() => {});
+      set({ code: null, pid: c.pid, setup: { done: true, role: 'patient' }, welcomeBack: c.personName || '' });
+      follow(true);
+    }
+  });
+}
+
 export function finishCarerSetup() { set({ setup: { done: true, role: 'carer' } }); }
 
 // Settings › Link to my phone: a code the caregiver types on their phone.
@@ -164,7 +181,7 @@ function startCarer() {
 // Simulator only: forget this watch and start setup again.
 export function resetWatch() {
   stop(); stopPairing();
-  set({ setup: null, code: null, pid: null, carer: null, patient: null, request: null, linked: false, lost: false, seenLinked: false });
+  set({ setup: null, code: null, pid: null, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
   if (carerStarted) location.reload(); // drop the caregiver's live data
 }
 

@@ -425,10 +425,11 @@ function AddCode({ t, onBack, onAccepted }) {
     try {
       const c = await readCode(code);
       if (c.role === 'carer') throw Object.assign(new Error(), { code: 'carer' });
+      if (c.role === 'replace') throw Object.assign(new Error(), { code: 'replace' });
       const w = { name: c.name || 'them' };
       w.stop = await requestLink(code, c, (r) => { if (r === 'accepted') onAccepted(c.pid); else { setWaiting(null); setErr(w.name + ' said no'); } });
       setWaiting(w);
-    } catch (x) { setErr(x.code === 'expired' ? 'Code expired' : x.code === 'carer' ? "That's a caregiver watch" : 'No watch shows that code'); } finally { setBusy(false); }
+    } catch (x) { setErr(x.code === 'expired' ? 'Code expired' : x.code === 'carer' ? "That's a caregiver watch" : x.code === 'replace' ? 'Replace watches on your phone' : 'No watch shows that code'); } finally { setBusy(false); }
   };
   if (waiting) return (
     <div style={base(t, 'padding: 8px 14px 12px; align-items: center; gap: 6px; text-align: center')}>

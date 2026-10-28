@@ -165,6 +165,13 @@ export async function requestLink(code, c, onResult) {
   return () => { done = true; stopCode(); clearInterval(poll); };
 }
 
+// A replacement watch: move the person (and all their history) onto the new watch.
+// The old watch stops writing; the code proves the new watch asked for it.
+export async function replaceWatch(code, c, p) {
+  await be.updateDoc('patients/' + p.id, { watchUid: c.watchUid, replaceCode: code, watchInfo: { battery: 100, lastSeen: Date.now() } });
+  await be.updateDoc('codes/' + code, { pid: p.id, personName: p.name });
+}
+
 // Stop monitoring someone (removes you and your watch; other caregivers stay).
 export async function stopMonitoring(p) {
   const a = actor(), group = ((p.carerGroups || {})[a.uid]) || [...new Set(a.carers)];
