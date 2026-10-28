@@ -162,6 +162,9 @@ export function About({ query }) {
   const first = query.get('first');
   const pr = live.profile || {};
   const [name, setName] = useState(pr.name || (live.user && live.user.name) || '');
+  // A new account's name can arrive a moment after the screen opens.
+  const known = pr.name || (live.user && live.user.name) || '';
+  useEffect(() => { if (known && !name) setName(known); }, [known]);
   const [phone, setPhone] = useState(pr.phone || '');
   const [city, setCity] = useState(pr.city || '');
   const [use, setUse] = useState(pr.use || 'others');

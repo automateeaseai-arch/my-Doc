@@ -20,18 +20,22 @@ export const init = (scope) => {
 };
 
 const user = (u) => (u ? { uid: u.uid, name: u.displayName || '', email: u.email || '', anon: u.isAnonymous } : null);
-export const onAuth = (cb) => onAuthStateChanged(auth, (u) => cb(user(u)));
+// Firebase doesn't announce name changes, so they are passed on to listeners here.
+const authSubs = new Set();
+const announce = () => authSubs.forEach((cb) => cb(user(auth.currentUser)));
+export const onAuth = (cb) => { authSubs.add(cb); const stop = onAuthStateChanged(auth, (u) => cb(user(u))); return () => { authSubs.delete(cb); stop(); }; };
 export const signUp = async ({ name, email, password }) => {
   const { user: u } = await createUserWithEmailAndPassword(auth, email.trim(), password);
   await updateProfile(u, { displayName: name.trim() });
   await u.reload();
+  announce();
 };
 export const signIn = ({ email, password }) => signInWithEmailAndPassword(auth, email.trim(), password);
 export const signInAnon = () => signInAnonymously(auth);
 export const signInGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 export const signOut = () => fbSignOut(auth);
-export const setName = (name) => updateProfile(auth.currentUser, { displayName: name });
+export const setName = async (name) => { await updateProfile(auth.currentUser, { displayName: name }); announce(); };
 export const clearAll = () => {};
 
 export const newId = () => doc(collection(db, '_')).id;

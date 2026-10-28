@@ -30,16 +30,16 @@ const base = (t, extraCss = '') => ({ ...s('width: 198px; height: 242px; box-siz
 const btn = 'display: flex; align-items: center; justify-content: center; border: 0; cursor: pointer; font-family: inherit; text-decoration: none; box-sizing: border-box';
 const title = 'font-family: Marcellus, serif; letter-spacing: 0.3px';
 
+// Alerts raised after the watch was opened pop up full screen (older ones stay in the list).
 function useNewAlerts(people, onNew) {
-  const seen = useRef(null);
+  const since = useRef(Date.now());
+  const seen = useRef(new Set());
   useEffect(() => {
-    const all = people.flatMap((p) => p.alerts.filter((a) => !a.read).map((a) => ({ ...a, p })));
-    if (seen.current === null) { seen.current = new Set(all.map((a) => a.p.id + a.id)); return; }
-    for (const a of all) {
-      const k = a.p.id + a.id;
-      if (seen.current.has(k)) continue;
+    for (const p of people) for (const a of p.alerts) {
+      const k = p.id + a.id;
+      if (a.read || a.at < since.current || seen.current.has(k)) continue;
       seen.current.add(k);
-      if (Date.now() - a.at < 10 * 60 * 1000) onNew(a);
+      onNew({ ...a, p });
     }
   });
 }

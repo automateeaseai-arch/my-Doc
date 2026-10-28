@@ -43,15 +43,14 @@ function screen(route, live) {
 // New alerts that arrive while the app is open: a message on screen, a buzz,
 // and a phone notification if the user allowed them.
 function useAlertNotices(live, settings) {
-  const seen = useRef(null);
+  const since = useRef(Date.now());
+  const seen = useRef(new Set());
   useEffect(() => {
-    const all = live.people.flatMap((p) => p.alerts.filter((a) => !a.read).map((a) => ({ ...a, pid: p.id })));
-    if (seen.current === null) { if (live.ready && live.user) seen.current = new Set(all.map((a) => a.pid + a.id)); return; }
+    const all = live.people.flatMap((p) => p.alerts.filter((a) => !a.read && a.at >= since.current).map((a) => ({ ...a, pid: p.id })));
     for (const a of all) {
       const key = a.pid + a.id;
       if (seen.current.has(key)) continue;
       seen.current.add(key);
-      if (Date.now() - a.at > 10 * 60 * 1000) continue;
       if (a.type === 'reading' && !settings.range) continue;
       if (a.type === 'dose' && !settings.doses) continue;
       const h = new Date().getHours();
