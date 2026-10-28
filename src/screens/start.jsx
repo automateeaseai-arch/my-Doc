@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { s, A, Logo, Back, Toggle, Seg, I, btn, section, go, toast } from '../ui.jsx';
-import { update, useStore } from '../store.js';
-import { CONDITIONS, AVATARS, initials } from '../data.js';
+import { update } from '../store.js';
+import { useLive, createPerson, updatePerson, removePerson, linkWatch } from '../live.js';
+import * as be from '../backend/index.js';
+import { CONDITIONS, initials } from '../health.js';
+
+export function Splash() {
+  return <main style={s('min-height: 100dvh; display: flex; align-items: center; justify-content: center; background: #FFFFFF')}><Logo size="lg" center /></main>;
+}
 
 export function Welcome() {
   return (
@@ -32,96 +38,159 @@ export function Welcome() {
         <p style={s('margin: 0; font-size: 15px; line-height: 1.6; color: #5B6672')}>See their vitals from their smartwatch, get alerts when something is wrong, and send help in seconds.</p>
       </div>
       <div style={s('display: flex; flex-direction: column; gap: 8px; position: relative')}>
-        <A to="/setup?first=1" style={btn.primary}>Get started</A>
+        <A to="/signup" style={btn.primary}>Get started</A>
         <A to="/signin" style="display: flex; height: 48px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #0B7A75; text-decoration: none">I already have an account</A>
       </div>
     </main>
   );
 }
 
-export function SignIn() {
-  const [show, setShow] = useState(false);
-  const [id, setId] = useState('0809 000 0000');
-  const [pw, setPw] = useState('mydoc2026');
-  const [err, setErr] = useState('');
-  const enter = () => { update(() => ({ signedIn: true })); go('/home'); };
-  const submit = (e) => {
-    e.preventDefault();
-    if (!id.trim()) return setErr('Enter your phone number or email.');
-    if (pw.length < 6) return setErr('Your password has at least 6 characters.');
-    enter();
-  };
-  const field = 'height: 52px; border: 1.5px solid #E4E8EC; border-radius: 14px; padding: 0 16px; font-size: 16px; font-family: inherit; color: #14202B; background: #FFFFFF';
+const field = 'height: 52px; border: 1.5px solid #E4E8EC; border-radius: 14px; padding: 0 16px; font-size: 16px; font-family: inherit; color: #14202B; background: #FFFFFF; width: 100%; box-sizing: border-box';
+const outlineBig = 'display: flex; height: 52px; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid #D5DBE0; border-radius: 16px; font-size: 15px; font-weight: 600; color: #14202B; background: #FFFFFF; font-family: inherit; cursor: pointer';
+
+function AuthFrame({ title, sub, children, onSubmit }) {
   return (
-    <form onSubmit={submit} style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 32px; gap: 16px; position: relative; overflow: hidden')}>
+    <form onSubmit={onSubmit} noValidate style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 32px; gap: 16px; position: relative; overflow: hidden')}>
       <div style={s('position: absolute; width: 360px; height: 360px; border-radius: 180px; background: #E3F5F3; top: -200px; right: -140px')} />
       <div style={s('display: flex; align-items: center; height: 44px; position: relative')}><Back to="/welcome" /></div>
       <div style={s('position: relative; padding-top: 12px')}><Logo size="md" /></div>
       <div style={s('display: flex; flex-direction: column; gap: 4px')}>
-        <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>Welcome back</h1>
-        <p style={s('margin: 0; font-size: 15px; color: #5B6672')}>Sign in to see the people you care for.</p>
+        <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>{title}</h1>
+        <p style={s('margin: 0; font-size: 15px; color: #5B6672')}>{sub}</p>
       </div>
+      {children}
+    </form>
+  );
+}
+
+function Password({ id, value, onChange, auto }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={s('display: flex; align-items: center; height: 52px; border: 1.5px solid #E4E8EC; border-radius: 14px; padding: 0 4px 0 16px; box-sizing: border-box')}>
+      <input id={id} autoComplete={auto} type={show ? 'text' : 'password'} value={value} onChange={(e) => onChange(e.target.value)} style={s('flex-grow: 1; min-width: 0; border: 0; outline: none; font-size: 16px; font-family: inherit; color: #14202B; background: transparent')} />
+      <button type="button" onClick={() => setShow(!show)} aria-label={show ? 'Hide password' : 'Show password'} style={s('width: 44px; height: 44px; border: 0; background: transparent; color: #5B6672; cursor: pointer; display: flex; align-items: center; justify-content: center')}><I.eye /></button>
+    </div>
+  );
+}
+
+const Err = ({ msg }) => (msg ? <div role="alert" style={s('font-size: 13px; font-weight: 600; color: #A81C2B; margin-top: -4px')}>{msg}</div> : null);
+const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
+export function SignIn() {
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!emailOk(email)) return setErr('Enter the email you signed up with.');
+    if (!pw) return setErr('Enter your password.');
+    setBusy(true); setErr('');
+    try { await be.signIn({ email, password: pw }); go('/home'); } catch (x) { setErr(be.authMessage(x)); } finally { setBusy(false); }
+  };
+  const forgot = async () => {
+    if (!emailOk(email)) return setErr('Type your email above first, then tap "Forgot password?".');
+    try { await be.resetPassword(email); toast('We emailed you a link to reset your password.'); } catch (x) { setErr(be.authMessage(x)); }
+  };
+  const google = async () => { setErr(''); try { await be.signInGoogle(); go('/home'); } catch (x) { setErr(be.authMessage(x)); } };
+  return (
+    <AuthFrame title="Welcome back" sub="Sign in to see the people you care for." onSubmit={submit}>
       <div style={s('display: flex; flex-direction: column; gap: 6px; margin-top: 8px')}>
-        <label htmlFor="si-id" style={s('font-size: 13px; font-weight: 600')}>Phone number or email</label>
-        <input id="si-id" autoComplete="username" value={id} onChange={(e) => setId(e.target.value)} style={s(field)} />
+        <label htmlFor="si-id" style={s('font-size: 13px; font-weight: 600')}>Email</label>
+        <input id="si-id" type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} style={s(field)} />
       </div>
       <div style={s('display: flex; flex-direction: column; gap: 6px')}>
         <label htmlFor="si-pw" style={s('font-size: 13px; font-weight: 600')}>Password</label>
-        <div style={s('display: flex; align-items: center; height: 52px; border: 1.5px solid #0B7A75; border-radius: 14px; padding: 0 4px 0 16px; box-sizing: border-box')}>
-          <input id="si-pw" autoComplete="current-password" type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} style={s('flex-grow: 1; min-width: 0; border: 0; outline: none; font-size: 16px; font-family: inherit; color: #14202B; background: transparent')} />
-          <button type="button" onClick={() => setShow(!show)} aria-label={show ? 'Hide password' : 'Show password'} style={s('width: 44px; height: 44px; border: 0; background: transparent; color: #5B6672; cursor: pointer; display: flex; align-items: center; justify-content: center')}><I.eye /></button>
-        </div>
-        <button type="button" onClick={() => toast('We sent a reset link to ' + (id || 'your phone'))} style={s('align-self: flex-end; font-size: 13px; font-weight: 600; padding: 8px 0; border: 0; background: transparent; color: #0B7A75; font-family: inherit; cursor: pointer')}>Forgot password?</button>
+        <Password id="si-pw" value={pw} onChange={setPw} auto="current-password" />
+        <button type="button" onClick={forgot} style={s('align-self: flex-end; font-size: 13px; font-weight: 600; padding: 8px 0; border: 0; background: transparent; color: #0B7A75; font-family: inherit; cursor: pointer')}>Forgot password?</button>
       </div>
-      {err && <div role="alert" style={s('font-size: 13px; font-weight: 600; color: #A81C2B; margin-top: -8px')}>{err}</div>}
-      <button type="submit" style={s(btn.primary)}>Sign in</button>
-      <div style={s('display: flex; align-items: center; gap: 12px; font-size: 13px; color: #5B6672')}><span style={s('flex-grow: 1; height: 1px; background: #E4E8EC')} />or<span style={s('flex-grow: 1; height: 1px; background: #E4E8EC')} /></div>
-      <button type="button" onClick={enter} style={s('display: flex; height: 52px; align-items: center; justify-content: center; border: 1.5px solid #D5DBE0; border-radius: 16px; font-size: 15px; font-weight: 600; color: #14202B; background: #FFFFFF; font-family: inherit; cursor: pointer')}>Continue with Google</button>
-      <button type="button" onClick={enter} style={s('display: flex; height: 52px; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid #D5DBE0; border-radius: 16px; font-size: 15px; font-weight: 600; color: #14202B; background: #FFFFFF; font-family: inherit; cursor: pointer')}><I.lock />Sign in with fingerprint or face</button>
+      <Err msg={err} />
+      <button type="submit" disabled={busy} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      {be.online && <>
+        <div style={s('display: flex; align-items: center; gap: 12px; font-size: 13px; color: #5B6672')}><span style={s('flex-grow: 1; height: 1px; background: #E4E8EC')} />or<span style={s('flex-grow: 1; height: 1px; background: #E4E8EC')} /></div>
+        <button type="button" onClick={google} style={s(outlineBig)}>Continue with Google</button>
+      </>}
       <div style={s('flex-grow: 1')} />
-      <div style={s('font-size: 14px; color: #5B6672; text-align: center')}>New to myDoc? <A to="/setup?first=1" style="font-weight: 600; color: #0B7A75">Create an account</A></div>
-    </form>
+      <div style={s('font-size: 14px; color: #5B6672; text-align: center')}>New to myDoc? <A to="/signup" style="font-weight: 600; color: #0B7A75">Create an account</A></div>
+    </AuthFrame>
+  );
+}
+
+export function SignUp() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return setErr('Type your name, so the people you care for know who is looking after them.');
+    if (!emailOk(email)) return setErr('Check the email address.');
+    if (pw.length < 6) return setErr('Use at least 6 characters for the password.');
+    setBusy(true); setErr('');
+    try { await be.signUp({ name, email, password: pw }); go('/setup?first=1'); } catch (x) { setErr(be.authMessage(x)); } finally { setBusy(false); }
+  };
+  const google = async () => { setErr(''); try { await be.signInGoogle(); go('/setup?first=1'); } catch (x) { setErr(be.authMessage(x)); } };
+  return (
+    <AuthFrame title="Create your account" sub="It takes a minute. Then add the first person you care for." onSubmit={submit}>
+      <div style={s('display: flex; flex-direction: column; gap: 6px; margin-top: 8px')}>
+        <label htmlFor="su-name" style={s('font-size: 13px; font-weight: 600')}>Your name</label>
+        <input id="su-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chinedu" style={s(field)} />
+      </div>
+      <div style={s('display: flex; flex-direction: column; gap: 6px')}>
+        <label htmlFor="su-email" style={s('font-size: 13px; font-weight: 600')}>Email</label>
+        <input id="su-email" type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} style={s(field)} />
+      </div>
+      <div style={s('display: flex; flex-direction: column; gap: 6px')}>
+        <label htmlFor="su-pw" style={s('font-size: 13px; font-weight: 600')}>Password</label>
+        <Password id="su-pw" value={pw} onChange={setPw} auto="new-password" />
+        <span style={s('font-size: 12px; color: #5B6672')}>At least 6 characters</span>
+      </div>
+      <Err msg={err} />
+      <button type="submit" disabled={busy} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Creating account…' : 'Create account'}</button>
+      {be.online && <button type="button" onClick={google} style={s(outlineBig)}>Continue with Google</button>}
+      {!be.online && <div style={s('font-size: 12px; line-height: 1.5; color: #8A5300; background: #FFF1DB; padding: 10px 12px; border-radius: 12px')}>Test mode: your account is kept on this phone only.</div>}
+      <div style={s('flex-grow: 1')} />
+      <div style={s('font-size: 14px; color: #5B6672; text-align: center')}>Already have an account? <A to="/signin" style="font-weight: 600; color: #0B7A75">Sign in</A></div>
+    </AuthFrame>
   );
 }
 
 // Set up (or edit) a person: name, conditions, emergency contacts.
 export function Setup({ query }) {
-  const st = useStore();
+  const live = useLive();
   const editId = query.get('edit');
   const first = query.get('first');
-  const editing = st.people.find((p) => p.id === editId);
+  const editing = live.people.find((p) => p.id === editId);
   const [who, setWho] = useState(editing ? (editing.self ? 'self' : 'other') : 'other');
-  const [name, setName] = useState(editing ? editing.name : first ? 'Mama Nkechi' : '');
-  const [on, setOn] = useState(() => Object.fromEntries((editing ? editing.conds : first ? ['Hypertension', 'Diabetes'] : []).map((c) => [c, true])));
-  const [contacts, setContacts] = useState(editing ? editing.contacts : first ? [{ name: 'Cathlyn', ini: 'C', rel: 'Granddaughter', phone: '0803 000 0000' }] : []);
+  const [name, setName] = useState(editing ? editing.name : '');
+  const [pronoun, setPronoun] = useState(editing ? editing.pronoun || '' : '');
+  const [phone, setPhone] = useState(editing ? editing.phone || '' : '');
+  const [on, setOn] = useState(() => Object.fromEntries((editing ? editing.conds : []).map((c) => [c, true])));
+  const [contacts, setContacts] = useState(editing ? editing.contacts : []);
   const [auto, setAuto] = useState(editing ? editing.autoAlert !== false : true);
   const [adding, setAdding] = useState(false);
   const [nc, setNc] = useState({ name: '', rel: '', phone: '' });
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
-  const done = () => {
+  const done = async () => {
     const nm = name.trim();
-    if (!nm) return setErr('Please type their name.');
+    if (!nm) return setErr(who === 'self' ? 'Please type your name.' : 'Please type their name.');
     const conds = CONDITIONS.filter((c) => on[c]);
-    if (first) {
-      update((x) => ({ signedIn: true, sel: 0, people: x.people.map((p, i) => (i === 0 ? { ...p, name: nm, ini: initials(nm), conds, contacts, autoAlert: auto } : p)) }));
-      go('/pair?who=' + st.people[0].id);
-      return;
-    }
-    if (editing) {
-      update((x) => ({ people: x.people.map((p) => (p.id === editing.id ? { ...p, name: nm, ini: initials(nm), conds, contacts, autoAlert: auto, self: who === 'self' } : p)) }));
-      toast('Saved');
-      go('/home');
-      return;
-    }
-    const id = 'p' + Date.now().toString(36);
-    const [bg, fg] = AVATARS[st.people.length % AVATARS.length];
-    const self = who === 'self';
-    const person = { id, name: nm, ini: initials(nm), bg, fg, her: self ? 'my' : 'their', him: self ? 'me' : 'them', she: self ? 'I' : 'they', self, conds, contacts, autoAlert: auto,
-      phone: '', watch: false, address: 'Unknown until a watch is paired', shortAddress: 'Unknown', week: 'No doses yet', note: 'Add medicine to start reminders', missed: false,
-      vitals: {}, mini: [], doses: [], summary: 'No watch paired yet.' };
-    update((x) => ({ people: [...x.people, person], sel: x.people.length }));
-    go('/pair?who=' + id);
+    const data = { name: nm, ini: initials(nm), self: who === 'self', conds, contacts, autoAlert: auto, phone: phone.trim(), pronoun: who === 'self' ? '' : pronoun };
+    setBusy(true);
+    try {
+      if (editing) { await updatePerson(editing.id, data); toast('Saved'); go('/home'); return; }
+      const id = await createPerson(data);
+      update(() => ({ sel: live.people.length }));
+      go('/pair?who=' + id + (first ? '&first=1' : ''));
+    } catch { setErr('Could not save. Check your internet connection and try again.'); } finally { setBusy(false); }
+  };
+  const del = async () => {
+    if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 4000); return; }
+    await removePerson(editing.id); update(() => ({ sel: 0 })); toast(editing.name + ' removed'); go('/home');
   };
 
   const addContact = (e) => {
@@ -133,11 +202,12 @@ export function Setup({ query }) {
   };
   const small = 'height: 44px; border: 1.5px solid #E4E8EC; border-radius: 12px; padding: 0 14px; font-size: 15px; font-family: inherit; color: #14202B; background: #FFFFFF; min-width: 0; width: 100%; box-sizing: border-box';
   const outlineSm = 'height: 44px; border: 1.5px solid #0B7A75; border-radius: 12px; background: #FFFFFF; color: #0B7A75; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer';
+  const chip = (onIt) => 'display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (onIt ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0');
 
   return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 14px')}>
       <div style={s('display: flex; align-items: center; justify-content: space-between; height: 44px')}>
-        <Back to={first ? '/welcome' : '/home'} />
+        <Back to="/home" />
         <Logo />
         <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{editing ? '' : '1 of 2'}</div>
       </div>
@@ -145,19 +215,27 @@ export function Setup({ query }) {
       <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{editing ? 'Edit ' + editing.name : 'Who are you monitoring?'}</h1>
       <Seg options={[['self', 'Myself'], ['other', 'Someone else']]} value={who} onChange={setWho} bg="#F5F7F8" h={44} />
       <div style={s('display: flex; align-items: center; gap: 14px')}>
-        <button type="button" aria-label="Import picture" onClick={() => toast('Photos come in a later version')} style={s('width: 64px; height: 64px; flex-shrink: 0; border-radius: 32px; border: 0; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative')}><I.camera /><span style={s('position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 11px; background: #0B7A75; color: #FFFFFF; border: 2px solid #FFFFFF; font-size: 16px; line-height: 20px; font-weight: 600')}>+</span></button>
+        <button type="button" aria-label="Add a photo" onClick={() => toast('Photos come in a later version')} style={s('width: 64px; height: 64px; flex-shrink: 0; border-radius: 32px; border: 0; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative')}><I.camera /><span style={s('position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 11px; background: #0B7A75; color: #FFFFFF; border: 2px solid #FFFFFF; font-size: 16px; line-height: 20px; font-weight: 600')}>+</span></button>
         <div style={s('display: flex; flex-direction: column; gap: 4px; flex-grow: 1; min-width: 0')}>
           <label htmlFor="nm" style={s('font-size: 12px; font-weight: 600; color: #5B6672')}>{who === 'self' ? 'Your name' : 'Their name'}</label>
           <input id="nm" value={name} onChange={(e) => { setName(e.target.value); setErr(''); }} placeholder={who === 'self' ? 'e.g. Yemi' : 'e.g. Mama Nkechi'} style={s(small)} />
         </div>
       </div>
-      {err && <div role="alert" style={s('font-size: 13px; font-weight: 600; color: #A81C2B; margin-top: -6px')}>{err}</div>}
+      {who === 'other' && (
+        <div style={s('display: flex; gap: 8px; align-items: center; flex-wrap: wrap')}>
+          <span style={s('font-size: 13px; color: #5B6672')}>Call them</span>
+          {[['she', 'she / her'], ['he', 'he / him'], ['', 'they / them']].map(([k, l]) => <button key={l} type="button" aria-pressed={pronoun === k} onClick={() => setPronoun(k)} style={s(chip(pronoun === k) + '; height: 36px; font-size: 13px')}>{l}</button>)}
+        </div>
+      )}
+      <div style={s('display: flex; flex-direction: column; gap: 4px')}>
+        <label htmlFor="ph" style={s('font-size: 12px; font-weight: 600; color: #5B6672')}>{who === 'self' ? 'Your phone number' : 'Their phone number'} (optional)</label>
+        <input id="ph" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0802 000 0000" style={s(small)} />
+      </div>
+      <Err msg={err} />
       <div style={s('display: flex; flex-direction: column; gap: 8px')}>
         <div style={s(section)}>Conditions</div>
         <div style={s('display: flex; flex-wrap: wrap; gap: 8px')}>
-          {CONDITIONS.map((c) => (
-            <button key={c} type="button" aria-pressed={!!on[c]} onClick={() => setOn({ ...on, [c]: !on[c] })} style={s('display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (on[c] ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0'))}>{on[c] && <I.tick />}{c}</button>
-          ))}
+          {CONDITIONS.map((c) => <button key={c} type="button" aria-pressed={!!on[c]} onClick={() => setOn({ ...on, [c]: !on[c] })} style={s(chip(on[c]))}>{on[c] && <I.tick />}{c}</button>)}
         </div>
       </div>
       <div style={s('display: flex; flex-direction: column; gap: 8px')}>
@@ -174,7 +252,7 @@ export function Setup({ query }) {
             <input aria-label="Contact name" placeholder="Name" value={nc.name} onChange={(e) => setNc({ ...nc, name: e.target.value })} style={s(small)} autoFocus />
             <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px')}>
               <input aria-label="Relationship" placeholder="e.g. Son" value={nc.rel} onChange={(e) => setNc({ ...nc, rel: e.target.value })} style={s(small)} />
-              <input aria-label="Phone number" placeholder="Phone" inputMode="tel" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} style={s(small)} />
+              <input aria-label="Phone number" placeholder="Phone" type="tel" inputMode="tel" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} style={s(small)} />
             </div>
             <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px')}>
               <button type="button" onClick={() => setAdding(false)} style={s(outlineSm)}>Cancel</button>
@@ -190,14 +268,15 @@ export function Setup({ query }) {
         <button type="button" role="switch" aria-checked={auto} onClick={() => setAuto(!auto)} style={s('display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 14px; color: #14202B; text-align: left; cursor: pointer')}><span>Alert them automatically when a reading is high</span><Toggle on={auto} /></button>
       </div>
       <div style={s('flex-grow: 1')} />
-      <button type="button" onClick={done} style={s(btn.primary)}>{editing ? 'Save' : 'Done'}</button>
+      <button type="button" disabled={busy} onClick={done} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Saving…' : editing ? 'Save' : 'Next'}</button>
+      {editing && <button type="button" onClick={del} style={s('height: 44px; border: 0; background: transparent; color: #A81C2B; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer')}>{confirmDel ? 'Tap again to remove ' + editing.name : 'Remove ' + editing.name}</button>}
     </main>
   );
 }
 
 // Uses the phone's contact picker where the browser has one (Android Chrome).
 const pickFromPhonebook = (set, list) => async () => {
-  if (!('contacts' in navigator && 'select' in navigator.contacts)) { toast('Your browser cannot open the phonebook. Use + Add contact.'); return; }
+  if (!('contacts' in navigator && 'select' in navigator.contacts)) { toast('This browser cannot open the phonebook. Use + Add contact.'); return; }
   try {
     const [c] = await navigator.contacts.select(['name', 'tel'], { multiple: false });
     if (!c) return;
@@ -207,48 +286,51 @@ const pickFromPhonebook = (set, list) => async () => {
 };
 
 export function Pair({ query }) {
-  const st = useStore();
-  const preset = st.people.findIndex((p) => p.id === query.get('who'));
+  const live = useLive();
+  const preset = live.people.findIndex((p) => p.id === query.get('who'));
   const [who, setWho] = useState(preset >= 0 ? preset : 0);
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
   const setDigit = (i, v) => {
     const d = v.replace(/\D/g, '');
-    if (d.length > 1) { // pasted the whole code
-      const all = d.slice(0, 6).split('');
-      setCode([0, 1, 2, 3, 4, 5].map((k) => all[k] || ''));
-      return;
-    }
+    if (d.length > 1) { const all = d.slice(0, 6).split(''); setCode([0, 1, 2, 3, 4, 5].map((k) => all[k] || '')); return; }
     const next = [...code]; next[i] = d; setCode(next); setErr('');
     if (d && i < 5) document.getElementById('dg' + (i + 1))?.focus();
   };
-  const pair = () => {
+  const p = live.people[who];
+  const pair = async () => {
+    if (!p) return setErr('Add a person first.');
     if (code.join('').length < 6) return setErr('Type all 6 digits shown on the watch.');
-    const p = st.people[who];
-    update((x) => ({ people: x.people.map((q, i) => (i === who ? { ...q, watch: true, battery: q.battery || 100 } : q)) }));
-    go('/paired?who=' + p.id);
+    setBusy(true); setErr('');
+    try { await linkWatch(code.join(''), p); go('/paired?who=' + p.id); } catch (x) {
+      setErr(x.code === 'no-code' ? 'No watch is showing that code. Check the digits on the watch.' : x.code === 'expired' ? 'That code has expired. Open myDoc on the watch again for a new one.' : 'Could not link. Check your internet connection.');
+    } finally { setBusy(false); }
   };
   return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #FFFFFF; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 14px')}>
       <div style={s('display: flex; align-items: center; justify-content: space-between; height: 44px')}>
-        <Back to={st.signedIn ? '/profile' : '/setup?first=1'} />
+        <Back to={query.get('first') ? '/home' : '/profile'} />
         <Logo />
-        <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>2 of 2</div>
+        <div style={s('width: 44px; font-size: 12px; font-weight: 600; color: #5B6672; text-align: right')}>{query.get('first') || query.get('who') ? '2 of 2' : ''}</div>
       </div>
-      <div style={s('height: 4px; border-radius: 2px; background: #0B7A75')} />
-      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>Pair their watch</h1>
+      {(query.get('first') || query.get('who')) && <div style={s('height: 4px; border-radius: 2px; background: #0B7A75')} />}
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>{p && p.self ? 'Pair your watch' : 'Pair their watch'}</h1>
       <div style={s('display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 20px; background: #F5F7F8')}>
         <div style={s('flex-shrink: 0; display: flex; flex-direction: column; align-items: center')}>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 5px 5px 0 0')} />
-          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>LINK THIS WATCH</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>482 913</span></div></div>
+          <div style={s('width: 78px; height: 92px; border-radius: 22px; background: #14202B; padding: 5px; box-sizing: border-box')}><div style={s('width: 100%; height: 100%; border-radius: 18px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px')}><span style={s('font-size: 6px; font-weight: 700')}>LINK THIS WATCH</span><span style={s('font-size: 11px; font-weight: 800; letter-spacing: 1px')}>••• •••</span></div></div>
           <div style={s('width: 34px; height: 12px; background: #2E3A45; border-radius: 0 0 5px 5px')} />
         </div>
         <ol style={s('margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: #14202B')}>
-          <li>Open myDoc on their watch.</li>
-          <li>Choose <b>I'm the patient</b> and finish their profile.</li>
-          <li>Type the 6-digit code it shows below.</li>
+          <li>Open myDoc on {p && p.self ? 'your' : 'their'} watch.</li>
+          <li>It shows a 6-digit code.</li>
+          <li>Type the code below.</li>
         </ol>
       </div>
+      <a href="./watch.html" target="_blank" rel="noopener" style={s('display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; text-decoration: none; font-size: 13px; line-height: 1.45')}>
+        <I.watch /><span><b>No watch yet?</b> Open the watch simulator on another phone (or another tab) to get a code.</span>
+      </a>
       <div style={s('display: flex; flex-direction: column; gap: 8px')}>
         <span style={s(section)}>Code from the watch</span>
         <div style={s('display: flex; gap: 8px; justify-content: center')}>
@@ -259,31 +341,32 @@ export function Pair({ query }) {
               style={{ ...s('width: 44px; height: 54px; box-sizing: border-box; border: 1.5px solid #0B7A75; border-radius: 12px; text-align: center; font-size: 22px; font-weight: 800; font-family: inherit; color: #14202B; min-width: 0'), marginRight: i === 2 ? 8 : 0 }} />
           ))}
         </div>
-        <div style={s('font-size: 12px; color: #5B6672; text-align: center')}>{err ? <span role="alert" style={s('color: #A81C2B; font-weight: 600')}>{err}</span> : 'Sample code: 482 913'}</div>
+        <Err msg={err} />
       </div>
-      <div style={s('display: flex; flex-direction: column; gap: 8px')}>
-        <span style={s(section)}>Whose watch is it?</span>
-        <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
-          {st.people.map((p, i) => (
-            <button key={p.id} type="button" aria-pressed={who === i} onClick={() => setWho(i)} style={s('height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (who === i ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0'))}>{p.name}</button>
-          ))}
+      {live.people.length > 1 && (
+        <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+          <span style={s(section)}>Whose watch is it?</span>
+          <div style={s('display: flex; gap: 8px; flex-wrap: wrap')}>
+            {live.people.map((q, i) => <button key={q.id} type="button" aria-pressed={who === i} onClick={() => setWho(i)} style={s('height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; ' + (who === i ? 'background: #0B7A75; color: #FFFFFF; border: 1.5px solid #0B7A75' : 'background: #FFFFFF; color: #14202B; border: 1.5px solid #D5DBE0'))}>{q.name}</button>)}
+          </div>
         </div>
-      </div>
+      )}
       <div style={s('flex-grow: 1')} />
-      <button type="button" onClick={pair} style={s(btn.primary)}>Pair watch</button>
+      <button type="button" disabled={busy} onClick={pair} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Linking…' : 'Pair watch'}</button>
       <A to="/home" style="display: flex; height: 40px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; text-decoration: none; color: #0B7A75">Skip for now</A>
     </main>
   );
 }
 
 export function Paired({ query }) {
-  const st = useStore();
-  const p = st.people.find((x) => x.id === query.get('who')) || st.people[0];
+  const live = useLive();
+  const p = live.people.find((x) => x.id === query.get('who')) || live.people[0];
+  if (!p) return null;
   const rows = [
     ['Readings', 'Sugar, blood pressure, heart rate and oxygen'],
-    ['Medicine reminders', `Doses ${p.she} marks "Taken" show here and on your watch`],
-    ['Alerts', 'High readings and missed doses reach both your devices'],
-    ['SOS', `${p.self ? 'My' : 'The'} SOS button calls 112 and tells you`]
+    ['Medicine reminders', `Doses ${p.she} mark${p.she === 'they' || p.she === 'I' ? '' : 's'} "Taken" on the watch show here`],
+    ['Alerts', 'High readings and missed doses reach your phone'],
+    ['SOS', `${p.self ? 'My' : 'The'} SOS button tells you and shares the location`]
   ];
   return (
     <main style={s('min-height: 100dvh; box-sizing: border-box; background: #F5F7F8; display: flex; flex-direction: column; padding: 12px 24px 24px; gap: 16px')}>
@@ -295,7 +378,7 @@ export function Paired({ query }) {
           <div style={s('display: flex; flex-direction: column; align-items: center')}><div style={s('width: 26px; height: 10px; background: #2E3A45; border-radius: 4px 4px 0 0')} /><div style={s('width: 58px; height: 68px; border-radius: 18px; background: #14202B; display: flex; align-items: center; justify-content: center')}><span style={s('font-size: 9px; font-weight: 800; color: #FFFFFF')}>{p.ini}</span></div><div style={s('width: 26px; height: 10px; background: #2E3A45; border-radius: 0 0 4px 4px')} /></div>
         </div>
         <h1 style={s('margin: 0; font-size: 28px; font-weight: 700')}>Watch linked</h1>
-        <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>{p.self ? 'Your' : p.name + "'s"} watch is now connected to your phone and your watch.</p>
+        <p style={s('margin: 0; font-size: 15px; line-height: 1.55; color: #5B6672')}>{p.self ? 'Your' : p.name + "'s"} watch is now connected to your phone.</p>
         <div style={s('width: 100%; background: #FFFFFF; border-radius: 20px; padding: 6px 16px; box-sizing: border-box; display: flex; flex-direction: column; text-align: left')}>
           {rows.map((r, i) => (
             <div key={r[0]} style={s('display: flex; align-items: center; gap: 12px; padding: 10px 0; ' + (i < rows.length - 1 ? 'border-bottom: 1px solid #E4E8EC' : ''))}>
@@ -305,7 +388,7 @@ export function Paired({ query }) {
           ))}
         </div>
       </div>
-      <A to="/pair" style={btn.outline}>Pair another watch</A>
+      <A to={'/p/' + p.id + '/meds'} style={btn.outline}>Add {p.self ? 'my' : p.her} medicine</A>
       <A to="/home" style={btn.primary}>Go to home</A>
     </main>
   );

@@ -48,3 +48,7 @@ input:focus { border-color: #0B7A75 !important; outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Watch simulator */
+@keyframes mdDot { 0%, 100% { opacity: 0.3; transform: scale(0.8) } 50% { opacity: 1; transform: scale(1.1) } }
+.md-dot { display: inline-block; width: 5px; height: 5px; border-radius: 3px; background: #2BB5B0; animation: mdDot 1.2s ease-in-out infinite; }

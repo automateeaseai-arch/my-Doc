@@ -10,6 +10,7 @@
     "share": "vite build && node tools/build-share.mjs share"
   },
   "dependencies": {
+    "firebase": "^10.14.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

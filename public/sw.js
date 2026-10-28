@@ -6,7 +6,7 @@ self.addEventListener('activate', (e) => e.waitUntil(
 ));
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET') return;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return; // live data and fonts go straight to the network
   const save = (res) => { if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; };
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(save).catch(() => caches.match(req).then((r) => r || caches.match('./'))));
