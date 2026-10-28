@@ -83,7 +83,8 @@ export async function finishSetup({ name, conds, contacts }) {
 function follow(fresh) {
   stop();
   stops.push(be.watchDoc('patients/' + st.pid, async (p) => {
-    if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) }); return; }
+    // Online, a replaced watch can no longer read the record at all (p is null).
+    if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) || !!st.patient || st.replaced }); return; }
     set({ patient: p, lost: false });
     if (fresh) { fresh = false; await setPlace(st.place || 0); if (!p.recent) await backfill(p); else tick(); }
   }));
