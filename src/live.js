@@ -52,9 +52,9 @@ function vitalsOf(p) {
     const last = recent[0];
     const vals = days.map((d) => { const a = p.days && p.days[dayKey(d)] && p.days[dayKey(d)][k]; return a && a.n ? Math.round(a.s / a.n) : null; });
     out[k] = {
-      now: last.v, show: showValue(k, last), at: last.at,
+      now: last.v, show: showValue(k, last), at: last.at, est: last.est || null,
       vals, labels: days.map((d, i) => (i === 6 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' }))),
-      rows: recent.slice(0, 3).map((r) => [when(r.at), showValue(k, r) + (k === 'sugar' ? ' mg/dL' : k === 'hr' ? ' bpm' : k === 'o2' ? '%' : ''), statusOf(k, r.v) !== 'Normal'])
+      rows: recent.slice(0, 3).map((r) => [when(r.at), (r.est ? '≈ ' : '') + showValue(k, r) + (k === 'sugar' ? ' mg/dL' : k === 'hr' ? ' bpm' : k === 'o2' ? '%' : ''), statusOf(k, r.v) !== 'Normal'])
     };
   }
   return out;

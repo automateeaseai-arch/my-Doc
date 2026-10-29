@@ -3,6 +3,7 @@
 import * as be from '../backend/index.js';
 import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins, initials } from '../health.js';
 import { startLive } from '../live.js';
+import { opticalSugar } from '../sensor/onwatch.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -42,7 +43,7 @@ export const SCENARIOS = {
 
 let st = { ready: false, uid: null, code: null, pid: null, patient: null, today: {}, linked: false, lost: false, ...load() };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
+const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, optical: st.optical, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
 export const getSim = () => st;
 export const onSim = (f) => { subs.add(f); return () => subs.delete(f); };
 export const setOption = (patch) => set(patch);
@@ -195,7 +196,10 @@ const alerted = {}; // metric -> time of last alert, so a long spike alerts once
 export async function sendReading(k, r) {
   const p = st.patient;
   if (!p) return;
-  const at = Date.now(), reading = { v: r.v, ...(r.v2 != null ? { v2: r.v2 } : {}), at };
+  // Optical sensor mode: the sugar value is what the sensor engine estimates from
+  // simulated light readings (r.v is the true value it is measuring).
+  if (k === 'sugar' && st.optical) { r = opticalSugar(st.pid, r.v); if (!r) return; }
+  const at = Date.now(), reading = { v: r.v, ...(r.v2 != null ? { v2: r.v2 } : {}), ...(r.est ? { est: r.est } : {}), at };
   const day = dayKey(), days = { ...(p.days || {}) };
   const agg = { ...((days[day] || {})[k] || { s: 0, n: 0 }) };
   agg.s += r.v; agg.n += 1;

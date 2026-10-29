@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
-  build: { rollupOptions: { input: { main: 'index.html', watch: 'watch.html' } } }
+  build: { rollupOptions: { input: { main: 'index.html', watch: 'watch.html', lab: 'lab.html' } } }
 });

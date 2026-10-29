@@ -50,6 +50,15 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Sensor engine (`src/sensor/`, page `lab.html`)
+Software for an optical (spectrophotometric) wrist sensor, ready before the hardware exists. **Experimental: not for medical decisions.**
+- `engine.js`: light at 12 wavelengths (530–1690 nm) → absorbance, drift removal, movement cancelled with the accelerometer → pulse wave (heart rate, signal quality) → pulse spectrum (blood only) → oxygen (red/infrared ratio) and a blood-sugar estimate with ± and quality → personal calibration from finger-pricks → accuracy scoring (MARD, ±15%, Clarke error grid).
+- `simsensor.js`: simulated sensor and people (skin tone, hydration, fat, temperature, sweat, movement, noise, person-to-person optics).
+- `device.js`: myDoc sensor protocol v1 over Bluetooth (service and packet format in the file). The simulator's data goes through the same encoder and decoder; "Connect a real sensor" uses Web Bluetooth.
+- `model.json`: trained by `node tools/train-sensor.mjs` (1,200 simulated readings, 400 people). On 120 new simulated people: 15.8% average error before calibration, 7% after two finger-pricks; oxygen within 0.6%. These are simulated numbers; real accuracy needs the hardware and a clinical study.
+- Watch simulator switch "Blood sugar from the optical sensor engine": sugar readings are estimated by the engine and stored with `est: { pm, q }`; the phone shows them as estimated.
+- Serotonin cannot be measured through the skin with light; migraine support should use sleep, heart rate variability, stress and missed medicine.
+
 ## Limits today
 
 - Alerts pop up only while the phone app is open (or in the background tab). Push notifications to a closed app need a small server (Firebase Cloud Functions, Blaze plan).

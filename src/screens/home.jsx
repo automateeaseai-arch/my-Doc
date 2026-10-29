@@ -317,6 +317,7 @@ export function Profile() {
 
         <div style={s('display: flex; flex-direction: column; background: #FFFFFF; border-radius: 20px; padding: 2px 14px')}>
           <a href="./watch.html" target="_blank" rel="noopener" style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Open the watch simulator<I.chev size={18} color="#5B6672" /></a>
+          <a href="./lab.html" target="_blank" rel="noopener" style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Open the Sensor Lab<I.chev size={18} color="#5B6672" /></a>
           <button type="button" onClick={() => toast('Help: write to help@mydoc.app')} style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Help and support<I.chev size={18} color="#5B6672" /></button>
           {!be.online && <button type="button" onClick={() => twoTap(() => { be.clearAll(); localStorage.removeItem('mydoc.prefs'); localStorage.removeItem('mydoc.watch'); go('/welcome'); })} style={s(row + '; border-bottom: 1px solid #E4E8EC' + (armed ? '; color: #A81C2B' : ''))}>{armed ? 'Tap again to delete all test data' : 'Delete all test data on this phone'}<I.chev size={18} color="#5B6672" /></button>}
           <button type="button" onClick={signOut} style={s(row + '; color: #A81C2B')}>Sign out</button>

@@ -121,7 +121,7 @@ export function Reading({ p, metric }) {
       <div style={s(card + '; padding: 18px; display: flex; flex-direction: column; gap: 12px')}>
         <div style={s('display: flex; align-items: center; gap: 10px')}>
           <Avatar p={p} size={36} radius={12} font={13} />
-          <div style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 14px; font-weight: 600')}>{p.name}</span><span style={s('font-size: 12px; color: #5B6672')}>{v.rows[0][0]} · from {p.her} watch</span></div>
+          <div style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 14px; font-weight: 600')}>{p.name}</span><span style={s('font-size: 12px; color: #5B6672')}>{v.rows[0][0]} · from {p.her} watch</span>{v.est && <span style={s('font-size: 12px; font-weight: 600; color: #8A5300')}>Estimated by optical sensor (experimental) · ± {v.est.pm} mg/dL</span>}</div>
           <span className={high ? 'md-wave' : ''} style={s('padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; ' + (high ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955'))}>{state}</span>
         </div>
         <div style={s('display: flex; align-items: baseline; gap: 6px')}><span style={{ ...s('font-size: 52px; font-weight: 800; line-height: 1'), color: high ? '#A81C2B' : '#14202B' }}>{big}</span><span style={s('font-size: 15px; color: #5B6672')}>{unitText}</span></div>

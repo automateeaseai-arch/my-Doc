@@ -405,6 +405,8 @@ export default function WatchPage() {
           </select>
         </div>
 
+        <button type="button" role="switch" aria-checked={!!st.optical} onClick={() => setOption({ optical: !st.optical })} style={s('display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 14px; color: #14202B; text-align: left; cursor: pointer')}><span>Blood sugar from the optical sensor engine (experimental) · <a href="./lab.html" onClick={(e) => e.stopPropagation()}>Sensor Lab</a></span><Toggle on={!!st.optical} /></button>
+
         <button type="button" role="switch" aria-checked={!!st.auto} onClick={() => setOption({ auto: !st.auto })} style={s('display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; border: 0; background: transparent; padding: 0; font-family: inherit; font-size: 14px; color: #14202B; text-align: left; cursor: pointer')}><span>Send normal readings every minute (while this page is open)</span><Toggle on={!!st.auto} /></button>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
