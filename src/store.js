@@ -5,7 +5,7 @@ const KEY = 'mydoc.prefs';
 
 const fresh = () => ({
   sel: 0,
-  settings: { range: true, doses: true, summary: true, quiet: false, unit: 'mg', theme: 'light', shareVitals: true },
+  settings: { range: true, doses: true, trend: true, summary: true, quiet: false, unit: 'mg', theme: 'light', shareVitals: true },
   serotoninWarn: true,
   summarySeen: ''
 });

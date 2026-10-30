@@ -68,6 +68,7 @@ function useAlertNotices(live, settings) {
       seen.current.add(key);
       if (a.type === 'reading' && !settings.range) continue;
       if (a.type === 'dose' && !settings.doses) continue;
+      if (a.type === 'trend' && settings.trend === false) continue;
       const h = new Date().getHours();
       if (settings.quiet && (h >= 22 || h < 6) && a.type !== 'sos') continue;
       toast(a.title + ' · ' + a.sub);
@@ -84,8 +85,8 @@ export default function App() {
   useAlertNotices(live, st.settings);
   // keep this phone's push subscription saved under every person, with current settings
   const ids = live.people.map((p) => p.id).join();
-  const { range, doses, quiet } = st.settings;
-  useEffect(() => { if (live.user && !live.user.anon && ids) savePush(live.user.uid, live.people, st.settings).catch(() => {}); }, [live.user && live.user.uid, ids, range, doses, quiet]);
+  const { range, doses, trend, quiet } = st.settings;
+  useEffect(() => { if (live.user && !live.user.anon && ids) savePush(live.user.uid, live.people, st.settings).catch(() => {}); }, [live.user && live.user.uid, ids, range, doses, trend, quiet]);
   return (
     <div className="md-app">
       <div key={route.split('?')[0]} className="md-page">{screen(route, live)}</div>

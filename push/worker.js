@@ -101,6 +101,7 @@ export default {
     const wanted = (s) => {
       if (m.type === 'reading' && s.range === false) return false;
       if (m.type === 'dose' && s.doses === false) return false;
+      if (m.type === 'trend' && s.trend === false) return false;
       if (s.quiet && m.type !== 'sos') { const h = new Date(Date.now() - (s.tz || 0) * 60000).getUTCHours(); if (h >= 22 || h < 6) return false; }
       return true;
     };

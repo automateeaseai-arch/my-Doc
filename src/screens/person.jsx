@@ -3,6 +3,7 @@ import { s, A, Logo, Back, Avatar, Toggle, Seg, Nav, I, btn, section, card, toas
 import { update, useStore, todayLabel } from '../store.js';
 import { useLive, markTaken, addDose, removeDose, sendToWatch, endSOS, METRICS, statusOf } from '../live.js';
 import { ORDER, sugarText, sugarUnit, clock, ago } from '../health.js';
+import { Insights } from './ai.jsx';
 
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const her = (p, t) => t.replaceAll('{her}', p.her).replaceAll('{him}', p.him);
@@ -53,6 +54,7 @@ export function Vitals({ p }) {
             <I.chev />
           </A>
         )}
+        <Insights p={p} />
         {keys.length ? (
           <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px')}>
             {keys.map((k) => {
@@ -139,6 +141,7 @@ export function Reading({ p, metric }) {
           </div>
         </div>
       </div>
+      <Insights p={p} k={metric} />
       <Seg options={[['day', 'Day'], ['week', 'Week'], ['month', 'Month']]} value={range} onChange={(r) => { setRange(r); if (r !== 'week') toast('Day and month views come with more history. Showing this week.'); }} />
       <div style={s(card + '; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 8px')}>
         <div style={s('display: flex; align-items: center; justify-content: space-between; gap: 8px')}>

@@ -5,6 +5,8 @@ import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins, i
 import { startLive } from '../live.js';
 import { opticalSugar } from '../sensor/onwatch.js';
 import { sendPush } from '../push.js';
+import { analyze } from '../ai/insights.js';
+import { makeHistory } from '../ai/history.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -139,7 +141,7 @@ function follow(fresh) {
     // Online, a replaced watch can no longer read the record at all (p is null).
     if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) || !!st.patient || st.replaced }); return; }
     set({ patient: p, lost: false });
-    if (fresh) { fresh = false; await setPlace(st.place || 0); if (!p.recent) await backfill(p); else tick(); }
+    if (fresh) { fresh = false; await setPlace(st.place || 0); await loadHistory(); if (!p.recent) await backfill(p); else { tick(); scheduleAnalysis(); } }
   }));
   stops.push(be.watchDoc(`patients/${st.pid}/doselog/${dayKey()}`, (d) => set({ today: (d && d.taken) || {} })));
 }
@@ -267,6 +269,7 @@ export async function sendReading(k, r) {
   const recent = { ...(p.recent || {}), [k]: [reading, ...(((p.recent || {})[k]) || [])].slice(0, 5) };
   st.patient = { ...p, recent, days };
   await be.addDoc(path() + '/readings', { k, ...reading });
+  if (histFor === st.pid) { hist.push({ k, v: reading.v, v2: reading.v2, at }); scheduleAnalysis(); }
   await be.updateDoc(path(), { recent, days, watchInfo: { battery: st.battery, lastSeen: at } });
   const s = statusOf(k, r.v);
   if (s !== 'Normal' && at - (alerted[k] || 0) > 30 * 60 * 1000) {
@@ -302,21 +305,68 @@ export async function setBattery(b) {
   if (st.pid) await be.updateDoc(path(), { watchInfo: { battery: b, lastSeen: Date.now() } });
 }
 
-// A week of history so the charts aren't empty on day one (marked as simulated).
-async function backfill(p) {
-  const days = {}, recent = {};
-  for (let n = 6; n >= 1; n--) {
-    const key = dayKey(daysBack(n));
-    days[key] = {};
-    for (const k of metrics()) {
-      let s = 0;
-      for (let j = 0; j < 4; j++) s += normal(k).v;
-      days[key][k] = { s, n: 4 };
-    }
+// ---- early warning (AI, src/ai/insights.js) -----------------------------------------
+// The watch keeps two weeks of readings, learns the person's normal and saves what it finds
+// on their record (`insights`). A new early warning is also sent to caregivers as an alert.
+const DAY = 86400000;
+let hist = [], logs = {}, histFor = null, aiTimer = null;
+async function loadHistory() {
+  histFor = null;
+  const rows = await be.getCol(path() + '/readings', { where: ['at', '>=', Date.now() - 14 * DAY] }).catch(() => []);
+  hist = rows.map((r) => ({ k: r.k, v: r.v, v2: r.v2, at: r.at }));
+  const dl = await be.getCol(path() + '/doselog', { orderBy: ['day', 'desc'], limit: 14 }).catch(() => []);
+  logs = Object.fromEntries(dl.map((d) => [d.day, d.taken || {}]));
+  histFor = st.pid;
+}
+function scheduleAnalysis() { clearTimeout(aiTimer); aiTimer = setTimeout(() => runAnalysis().catch(() => {}), 1500); }
+export async function runAnalysis() {
+  const p = st.patient;
+  if (!p || histFor !== st.pid) return;
+  logs[dayKey()] = st.today || {};
+  const her = p.self ? 'my' : p.pronoun === 'he' ? 'his' : p.pronoun === 'she' ? 'her' : 'their';
+  const r = analyze({ readings: hist, doses: p.doses, doselog: logs, name: p.name, her });
+  const prev = p.insights || {}, warned = { ...(prev.warned || {}) };
+  const fresh = r.items.filter((i) => i.level === 'warn' && (!warned[i.id] || r.at - warned[i.id] > DAY));
+  for (const i of fresh) warned[i.id] = r.at;
+  const insights = { ...r, warned };
+  if (fresh.length || JSON.stringify(prev.items) !== JSON.stringify(r.items) || r.at - (prev.at || 0) > 30 * 60000) {
+    st.patient = { ...st.patient, insights };
+    await be.updateDoc(path(), { insights });
   }
-  st.patient = { ...p, days, recent };
-  await be.updateDoc(path(), { days, recent, simulatedHistory: true });
-  await sendNormal();
+  for (const i of fresh) await raise({ kind: 'warn', type: 'trend', k: i.k, at: r.at, read: false, title: 'Early warning: ' + i.title, sub: `${p.name} · ${i.text}` });
+}
+
+// Writes a simulated history (marked as simulated) and the daily averages the charts use.
+async function writeHistory(readings) {
+  for (let i = 0; i < readings.length; i += 40) await Promise.all(readings.slice(i, i + 40).map((r) => be.addDoc(path() + '/readings', { ...r, simulated: true })));
+  const days = {}, recent = {};
+  for (const r of readings) {
+    const key = dayKey(new Date(r.at)), a = ((days[key] = days[key] || {})[r.k] = (days[key] || {})[r.k] || { s: 0, n: 0 });
+    a.s += r.v; a.n += 1;
+  }
+  for (const k of metrics()) recent[k] = readings.filter((r) => r.k === k).sort((a, b) => b.at - a.at).slice(0, 5).map((r) => ({ v: r.v, ...(r.v2 != null ? { v2: r.v2 } : {}), at: r.at }));
+  st.patient = { ...st.patient, days, recent };
+  await be.updateDoc(path(), { days, recent, simulatedHistory: true, watchInfo: { battery: st.battery, lastSeen: Date.now() } });
+  hist = readings.map((r) => ({ k: r.k, v: r.v, v2: r.v2, at: r.at }));
+  histFor = st.pid;
+}
+
+// Two weeks of history so charts and early warning work on day one.
+async function backfill() {
+  await writeHistory(makeHistory(metrics()));
+  await runAnalysis();
+}
+
+// Simulator demo: replace the last two weeks with a story ('sugar' or 'bp' creeping up, or null).
+export async function demoStory(story) {
+  if (!st.patient) return;
+  const old = await be.getCol(path() + '/readings', { where: ['at', '>=', Date.now() - 15 * DAY] }).catch(() => []);
+  for (let i = 0; i < old.length; i += 40) await Promise.all(old.slice(i, i + 40).map((r) => be.deleteDoc(path() + '/readings/' + r.id).catch(() => {})));
+  // random data: pick a fortnight where the story shows (it does in about 9 of 10)
+  let h = makeHistory(metrics(), { story });
+  for (let i = 0; story && i < 8 && !analyze({ readings: h }).items.some((x) => x.k === story && x.level === 'warn'); i++) h = makeHistory(metrics(), { story });
+  await writeHistory(h);
+  await runAnalysis();
 }
 
 export async function takeDose(dose) {

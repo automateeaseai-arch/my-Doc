@@ -4,6 +4,7 @@ import { update, useStore, greeting, longDate } from '../store.js';
 import { useLive, markAlertsRead, deleteMyAccount, METRICS, statusOf } from '../live.js';
 import * as be from '../backend/index.js';
 import { sugarText, dayKey, ago } from '../health.js';
+import { Spark, LEVEL, insightLine } from './ai.jsx';
 import { pushSupported, needsHomeScreen, enablePush, disablePush, pushIsOn } from '../push.js';
 
 const pillStyle = (warn) => 'display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; ' + (warn ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955');
@@ -102,6 +103,7 @@ export function Home() {
                 {mini.map((m) => <div key={m[0]} style={s('display: flex; flex-direction: column; align-items: center; padding: 8px 4px; border-radius: 14px; ' + (m[2] ? 'background: #FDECEE; color: #A81C2B' : 'background: #F5F7F8; color: #14202B'))}><span style={s('font-size: 10px; font-weight: 600; letter-spacing: 0.3px')}>{m[0]}</span><span style={s('font-size: 17px; font-weight: 800')}>{m[1]}</span></div>)}
               </div>
             )}
+            {(() => { const ai = insightLine(p); return ai && ai.level !== 'good' && <div style={{ ...s('display: flex; align-items: flex-start; gap: 6px; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; line-height: 1.4; text-align: left'), background: LEVEL[ai.level].bg, color: LEVEL[ai.level].fg }}><span style={s('flex-shrink: 0; display: flex; padding-top: 1px')}><Spark size={14} /></span><span>{ai.title}</span></div>; })()}
           </A>
           <button type="button" disabled={n < 2} onClick={() => pick(i + 1)} aria-label="Next person" style={s('width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; color: #0B7A75; cursor: pointer; display: flex; align-items: center; justify-content: center' + (n < 2 ? '; visibility: hidden' : ''))}><I.chevR /></button>
         </div>
@@ -157,7 +159,7 @@ export function Alerts() {
             const u = !a.read, k = K[a.kind] || K.warn;
             return (
               <A key={a.pid + a.id} to={alertTo(a.pid, a)} style={'display: flex; align-items: center; gap: 12px; padding: 12px 8px; border-radius: 14px; text-decoration: none; color: #14202B; ' + (u ? 'background: #FDF6F6' : '') + (i < list.length - 1 ? '; border-bottom: 1px solid #E4E8EC' : '')}>
-                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; font-size: ' + (a.type === 'sos' ? '11px' : '18px') + '; font-weight: 800; display: flex; align-items: center; justify-content: center'), background: k[0], color: k[1] }}>{a.type === 'sos' ? 'SOS' : '!'}</span>
+                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; font-size: ' + (a.type === 'sos' ? '11px' : '18px') + '; font-weight: 800; display: flex; align-items: center; justify-content: center'), background: k[0], color: k[1] }}>{a.type === 'sos' ? 'SOS' : a.type === 'trend' ? <Spark size={18} /> : '!'}</span>
                 <span style={s('display: flex; flex-direction: column; flex-grow: 1; gap: 1px')}><span style={s('font-size: 14px; font-weight: 600')}>{a.title}</span><span style={s('font-size: 12px; color: #5B6672')}>{a.sub}</span></span>
                 <span style={s('display: flex; flex-direction: column; align-items: flex-end; gap: 6px')}><span style={s('font-size: 11px; color: #5B6672; white-space: nowrap')}>{alertTime(a.at)}</span><span style={{ ...s('width: 10px; height: 10px; border-radius: 5px'), background: u ? '#D62839' : 'transparent' }} /></span>
               </A>
@@ -185,12 +187,13 @@ export function Summary() {
       const m = METRICS[k], todays = v.vals[6];
       return todays != null ? `${m.label || m.title} averaged ${todays}${k === 'o2' ? '%' : ''}` : null;
     }).filter(Boolean);
-    return { p, ...nextDose(p), w, line: lines.slice(0, 2).join(', ') + (lines.length ? '.' : p.watch ? 'No readings today.' : 'No watch paired yet.') };
+    const ai = insightLine(p);
+    return { p, ...nextDose(p), w, ai, line: lines.slice(0, 2).join(', ') + (lines.length ? '.' : p.watch ? 'No readings today.' : 'No watch paired yet.') };
   });
   const taken = per.reduce((a, x) => a + x.taken, 0), total = per.reduce((a, x) => a + x.total, 0);
   const warnings = per.reduce((a, x) => a + x.w, 0);
   const share = async () => {
-    const text = `myDoc daily summary, ${longDate()}: ${taken} of ${total} doses taken, ${warnings} warning${warnings === 1 ? '' : 's'}.`;
+    const text = `myDoc daily summary, ${longDate()}: ${taken} of ${total} doses taken, ${warnings} warning${warnings === 1 ? '' : 's'}.` + per.filter((x) => x.ai && x.ai.level !== 'good').map((x) => ` ${x.p.name}: ${x.ai.title}.`).join('');
     try { await navigator.share({ title: 'myDoc daily summary', text }); setShared(true); } catch (e) { if (e && e.name === 'AbortError') return; try { await navigator.clipboard.writeText(text); toast('Summary copied. Paste it to your family.'); setShared(true); } catch { toast(text); } }
   };
   return (
@@ -212,12 +215,13 @@ export function Summary() {
           </div>
         </div>
         <div style={s('padding: 8px 20px 4px; display: flex; flex-direction: column')}>
-          {per.map(({ p, due, taken: t, total: n, w, line }, i) => (
+          {per.map(({ p, due, taken: t, total: n, w, line, ai }, i) => (
             <A key={p.id} to={personHome(p)} style={'display: flex; gap: 12px; padding: 14px 0; text-decoration: none; color: #14202B' + (i < per.length - 1 ? '; border-bottom: 1px solid #E4E8EC' : '')}>
               <Avatar p={p} size={44} radius={15} font={15} />
               <span style={s('display: flex; flex-direction: column; gap: 4px; flex-grow: 1')}>
                 <span style={s('display: flex; align-items: center; justify-content: space-between; gap: 8px')}><span style={s('font-size: 15px; font-weight: 700')}>{p.name}</span><span className={w ? 'md-wave' : ''} style={s('padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; ' + (w ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955'))}>{w ? w + ' warning' + (w > 1 ? 's' : '') : 'All normal'}</span></span>
                 <span style={s('font-size: 13px; line-height: 1.45; color: #5B6672')}>{line} {n ? `${t} of ${n} doses taken${due ? `; ${due.name} at ${due.time} is ${due.st === 'missed' ? 'missed' : 'still due'}.` : '.'}` : ''}</span>
+                {ai && <span style={{ ...s('display: flex; gap: 6px; font-size: 13px; line-height: 1.45; font-weight: 600'), color: LEVEL[ai.level].fg }}><span style={s('flex-shrink: 0; padding-top: 2px')}><Spark size={13} /></span><span>{ai.level === 'good' ? 'AI: steady, within ' + p.her + ' usual pattern.' : 'AI: ' + ai.title + '.'}</span></span>}
               </span>
             </A>
           ))}
@@ -240,6 +244,7 @@ export function Profile() {
   const al = [
     ['range', 'Readings out of range', 'High or low sugar, blood pressure, heart rate'],
     ['doses', 'Missed doses', '30 minutes after a dose is due'],
+    ['trend', 'Early warnings (AI)', 'Worrying trends before readings go out of range'],
     ['summary', 'Daily summary', 'Every evening at 20:00'],
     ['quiet', 'Quiet hours', '22:00–06:00 · emergencies still ring']
   ];

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, demoStory, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS, initials } from '../health.js';
 import CarerFace, { CarerUnlinked } from './Carer.jsx';
 
@@ -461,6 +461,17 @@ export default function WatchPage() {
             <button type="button" disabled={!p} onClick={() => run('normal', sendNormal)} style={s(btn + '; border-color: #0B7A75; color: #0B7A75')}>{busy === 'normal' ? 'Sent ✓' : 'All normal'}</button>
             {Object.entries(SCENARIOS).map(([id, sc]) => <button key={id} type="button" disabled={!p} onClick={() => run(id, () => runScenario(id))} style={s(btn + '; border-color: #F2B8BE; color: #A81C2B')}>{busy === id ? 'Sent ✓' : sc.label}</button>)}
           </div>
+        </div>
+
+        <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+          <span style={s(label)}>Early warning (AI)</span>
+          <span style={s('font-size: 13px; color: #5B6672; line-height: 1.5')}>The watch learns this person's normal from two weeks of readings and warns caregivers about trends before readings go out of range. Try a story: it replaces the last two weeks with simulated readings.</span>
+          <div style={s('display: flex; flex-wrap: wrap; gap: 8px')}>
+            {[['sugar', 'Sugar creeping up'], ['bp', 'Blood pressure creeping up'], [null, 'Normal fortnight']].map(([k, l]) => <button key={l} type="button" disabled={!p || !!busy} onClick={() => run('ai' + k, () => demoStory(k))} style={s(btn + (k ? '; border-color: #F2B33D; color: #8A5300' : ''))}>{busy === 'ai' + k ? 'Writing history…' : l}</button>)}
+          </div>
+          {p && p.insights && <div style={s('display: flex; flex-direction: column; gap: 6px')}>
+            {p.insights.items.map((i) => <div key={i.id} style={s('padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.45; ' + ({ warn: 'background: #FDECEE; color: #A81C2B', watch: 'background: #FFF1DB; color: #8A5300', info: 'background: #F5F7F8; color: #5B6672', good: 'background: #E3F5F3; color: #075955' }[i.level]))}><b>{i.title}</b><br />{i.text}</div>)}
+          </div>}
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>

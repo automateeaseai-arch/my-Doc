@@ -50,6 +50,13 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Early warning (AI) (`src/ai/`, `src/screens/ai.jsx`)
+Runs on the watch, free and offline (no cloud AI). It learns each person's own normal and warns caregivers before readings go out of range.
+- `insights.js`: personal baseline per metric and time of day (six slots, median and spread over days 4–14); unusual reading for this person; 3-day shift; trend over the last week (Theil–Sen on rhythm-adjusted daily averages) with a 3-day forecast of the highest (or lowest) time of day, and an early warning when it would cross the normal range within about 4 days; missed doses named as a reason. Every finding says why.
+- The watch saves the result on the person's record (`insights`) and sends each new early warning as an alert (`type: 'trend'`, push included; at most once a day per finding). Phone: Home card line, an "Early warning · AI" card with forecast chart on the person's screen and each reading, a line in the daily summary, and a Profile switch "Early warnings (AI)".
+- Watch simulator: two weeks of simulated history at setup; stories "Sugar creeping up" and "Blood pressure creeping up" (every reading stays in range) and "Normal fortnight".
+- Tested on simulated people: no warnings on about 99% of steady fortnights; creeping sugar and blood pressure warned early in about 90–95% of stories.
+
 ## Recovery, privacy and deleting data
 - **Recovery code:** shown on the watch after setup (and in watch Settings). It is stored only as a hash (`recovery/{sha256}`); a new watch types it (Replacing my watch → No caregiver? Use recovery code) to move the person over. Rules allow that move only with a matching code, and only `watchUid`, `recoverKey`, `watchInfo` may change.
 - **Privacy notice:** `public/privacy.html`, linked from Welcome, Sign up, Profile and watch Settings.

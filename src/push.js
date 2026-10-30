@@ -38,7 +38,7 @@ export async function savePush(uid, people, settings, sub) {
   sub = sub || (pushSupported() && Notification.permission === 'granted' ? await current() : null);
   if (!sub) return;
   const j = sub.toJSON();
-  const doc = { uid, endpoint: j.endpoint, keys: j.keys, range: !!settings.range, doses: !!settings.doses, quiet: !!settings.quiet, tz: new Date().getTimezoneOffset(), at: Date.now() };
+  const doc = { uid, endpoint: j.endpoint, keys: j.keys, range: !!settings.range, doses: !!settings.doses, trend: settings.trend !== false, quiet: !!settings.quiet, tz: new Date().getTimezoneOffset(), at: Date.now() };
   await Promise.all(people.map((p) => be.setDoc(`patients/${p.id}/push/${uid}_${deviceId(j.endpoint)}`, doc).catch(() => {})));
 }
 
