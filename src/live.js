@@ -177,6 +177,9 @@ export async function stopMonitoring(p) {
   const a = actor(), group = ((p.carerGroups || {})[a.uid]) || [...new Set(a.carers)];
   const names = { ...(p.carerNames || {}) }, groups = { ...(p.carerGroups || {}) };
   delete names[a.uid]; delete groups[a.uid];
+  // this caregiver's phones stop getting alerts for this person
+  const subs = await be.getCol(`patients/${p.id}/push`).catch(() => []);
+  await Promise.all(subs.filter((x) => x.uid === a.uid).map((x) => be.deleteDoc(`patients/${p.id}/push/${x.id}`).catch(() => {})));
   await be.updateDoc('patients/' + p.id, { carers: (p.carers || []).filter((x) => !group.includes(x)), carerNames: names, carerGroups: groups });
 }
 

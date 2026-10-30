@@ -19,6 +19,7 @@ export const signInAnon = call('signInAnon');
 export const signInGoogle = call('signInGoogle');
 export const resetPassword = call('resetPassword');
 export const signOut = call('signOut');
+export const idToken = call('idToken');
 export const setName = call('setName');
 export const clearAll = call('clearAll');
 export const newId = call('newId');

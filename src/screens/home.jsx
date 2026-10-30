@@ -4,6 +4,7 @@ import { update, useStore, greeting, longDate } from '../store.js';
 import { useLive, markAlertsRead, METRICS, statusOf } from '../live.js';
 import * as be from '../backend/index.js';
 import { sugarText, dayKey, ago } from '../health.js';
+import { pushSupported, needsHomeScreen, enablePush, disablePush, pushIsOn } from '../push.js';
 
 const pillStyle = (warn) => 'display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; ' + (warn ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955');
 
@@ -243,7 +244,19 @@ export function Profile() {
     ['quiet', 'Quiet hours', '22:00–06:00 · emergencies still ring']
   ];
   const row = 'display: flex; align-items: center; justify-content: space-between; min-height: 52px; font-size: 14px; font-weight: 600; color: #14202B; text-decoration: none; border: 0; background: transparent; font-family: inherit; padding: 0; cursor: pointer; width: 100%; text-align: left';
-  const signOut = async () => { await be.signOut(); go('/welcome'); };
+  const [push, setPush] = useState(null); // null = checking
+  useEffect(() => { pushIsOn().then(setPush).catch(() => setPush(false)); }, []);
+  const togglePush = async () => {
+    const uid = live.user && live.user.uid;
+    if (!uid) return;
+    if (push) { await disablePush(uid, live.people); setPush(false); toast('Alerts when myDoc is closed are off'); return; }
+    try {
+      const r = await enablePush(uid, live.people, set);
+      setPush(r === 'on');
+      toast({ on: 'You will get alerts even when myDoc is closed', blocked: 'Notifications are blocked. Turn them on in the browser settings.', homescreen: 'On iPhone: tap Share, then Add to Home Screen, and open myDoc from there first.', unsupported: 'This browser cannot get alerts while myDoc is closed.' }[r]);
+    } catch { toast('Could not turn alerts on. Check your connection and try again.'); }
+  };
+  const signOut = async () => { if (push && live.user) await disablePush(live.user.uid, live.people).catch(() => {}); await be.signOut(); go('/welcome'); };
   const sel = live.people[Math.min(st.sel, live.people.length - 1)];
   const u = live.user || {};
   const pr = live.profile || {};
@@ -287,7 +300,12 @@ export function Profile() {
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
           <div style={s(section)}>Alerts</div>
           <div style={s('display: flex; flex-direction: column; background: #FFFFFF; border-radius: 20px; padding: 2px 14px')}>
-            {notif !== 'unsupported' && notif !== 'granted' && (
+            {(pushSupported() || needsHomeScreen()) ? (
+              <button type="button" role="switch" aria-checked={!!push} disabled={push === null} onClick={togglePush} style={s('display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 8px 0; border: 0; border-bottom: 1px solid #E4E8EC; background: transparent; font-family: inherit; color: #14202B; text-align: left; cursor: pointer')}>
+                <span style={s('display: flex; flex-direction: column')}><span style={s('font-size: 14px; font-weight: 600')}>Alerts when myDoc is closed</span><span style={s('font-size: 12px; color: #5B6672')}>{needsHomeScreen() ? 'iPhone: add myDoc to your Home Screen first' : 'Notifications on this phone, even when the app is closed'}</span></span>
+                <Toggle on={!!push} />
+              </button>
+            ) : notif !== 'unsupported' && notif !== 'granted' && (
               <button type="button" onClick={async () => { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Notifications are on' : 'Notifications are blocked. Turn them on in the browser settings.'); }} style={s(row + '; min-height: 60px; border-bottom: 1px solid #E4E8EC; color: #0B7A75')}>
                 <span style={s('display: flex; flex-direction: column')}><span>Turn on phone notifications</span><span style={s('font-size: 12px; font-weight: 400; color: #5B6672')}>So alerts pop up while myDoc is open in the background</span></span><I.chev size={18} color="#0B7A75" />
               </button>

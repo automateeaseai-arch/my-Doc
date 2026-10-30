@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useRoute, Toasts, toast, go } from './ui.jsx';
 import { useStore } from './store.js';
 import { useLive } from './live.js';
+import { savePush } from './push.js';
 import { Splash, Welcome, SignIn, SignUp, About, Setup, Pair, Paired } from './screens/start.jsx';
 import { Home, Alerts, Summary, Profile } from './screens/home.jsx';
 import { Vitals, Reading, Call, Locate, Sent, Meds, Serotonin } from './screens/person.jsx';
@@ -72,6 +73,10 @@ export default function App() {
   const live = useLive();
   const st = useStore();
   useAlertNotices(live, st.settings);
+  // keep this phone's push subscription saved under every person, with current settings
+  const ids = live.people.map((p) => p.id).join();
+  const { range, doses, quiet } = st.settings;
+  useEffect(() => { if (live.user && !live.user.anon && ids) savePush(live.user.uid, live.people, st.settings).catch(() => {}); }, [live.user && live.user.uid, ids, range, doses, quiet]);
   return (
     <div className="md-app">
       <div key={route.split('?')[0]} className="md-page">{screen(route, live)}</div>

@@ -109,6 +109,7 @@ export const signInAnon = async () => {
 export const signInGoogle = async () => fail('auth/operation-not-supported-in-this-environment');
 export const resetPassword = async () => fail('auth/operation-not-supported-in-this-environment');
 export const signOut = async () => setSession(null);
+export const idToken = async () => null; // this-phone-only copy: no push service
 export const setName = async (name) => {
   const users = read(USERS_KEY, {});
   for (const u of Object.values(users)) if (current && u.uid === current.uid) u.name = name;

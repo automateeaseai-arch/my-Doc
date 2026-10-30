@@ -35,6 +35,7 @@ export const signInAnon = () => signInAnonymously(auth);
 export const signInGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 export const signOut = () => fbSignOut(auth);
+export const idToken = () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null));
 export const setName = async (name) => { await updateProfile(auth.currentUser, { displayName: name }); announce(); };
 export const clearAll = () => {};
 

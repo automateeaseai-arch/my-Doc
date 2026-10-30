@@ -97,10 +97,18 @@ export default {
     } catch (e) { return json(req, { error: 'not-allowed' }, e.status === 401 || e.status === 403 ? 403 : 502); }
     // only people who are still caregivers (a removed caregiver's old subscription is skipped and deleted)
     const carers = new Set(patient.carers || []);
+    // each caregiver's own alert settings (from the app's Profile), and quiet hours 22:00–06:00
+    const wanted = (s) => {
+      if (m.type === 'reading' && s.range === false) return false;
+      if (m.type === 'dose' && s.doses === false) return false;
+      if (s.quiet && m.type !== 'sos') { const h = new Date(Date.now() - (s.tz || 0) * 60000).getUTCHours(); if (h >= 22 || h < 6) return false; }
+      return true;
+    };
     const message = { title: String(m.title || 'myDoc').slice(0, 120), body: String(m.body || '').slice(0, 300), tag: String(m.tag || '').slice(0, 80), url: String(m.url || './').slice(0, 200), urgent: !!m.urgent };
     let sent = 0;
     await Promise.all(subs.map(async (s) => {
       if (!carers.has(s.uid) || !s.endpoint || !s.keys) { await firestore(env, token, s.path, 'DELETE').catch(() => {}); return; }
+      if (!wanted(s)) return;
       const status = await push(env, jwk, s, message, m.urgent).catch(() => 0);
       if (status === 404 || status === 410) await firestore(env, token, s.path, 'DELETE').catch(() => {}); // phone unsubscribed
       else if (status >= 200 && status < 300) sent++;

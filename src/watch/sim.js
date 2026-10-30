@@ -4,6 +4,7 @@ import * as be from '../backend/index.js';
 import { METRICS, statusOf, showValue, dayKey, daysBack, clock, mins, nowMins, initials } from '../health.js';
 import { startLive } from '../live.js';
 import { opticalSugar } from '../sensor/onwatch.js';
+import { sendPush } from '../push.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -193,6 +194,12 @@ const path = () => 'patients/' + st.pid;
 const metrics = () => PROFILES[st.profile || 'diabetes'].metrics;
 const alerted = {}; // metric -> time of last alert, so a long spike alerts once
 
+// Save an alert for the caregivers and push it to their phones (even when myDoc is closed).
+async function raise(a) {
+  await be.addDoc(path() + '/alerts', a);
+  sendPush(st.pid, { type: a.type, title: a.title, body: a.sub, tag: a.type + (a.k || ''), urgent: a.type === 'sos', url: a.type === 'sos' ? `./#/p/${st.pid}/locate` : './#/alerts' });
+}
+
 export async function sendReading(k, r) {
   const p = st.patient;
   if (!p) return;
@@ -213,7 +220,7 @@ export async function sendReading(k, r) {
   if (s !== 'Normal' && at - (alerted[k] || 0) > 30 * 60 * 1000) {
     alerted[k] = at;
     const m = METRICS[k];
-    await be.addDoc(path() + '/alerts', {
+    await raise({
       kind: 'danger', type: 'reading', k, at, read: false,
       title: (m.label || m.title) + ' is ' + s.toLowerCase(),
       sub: `${p.name} · ${showValue(k, reading)} ${k === 'o2' ? '%' : m.unit}`
@@ -268,7 +275,7 @@ export async function takeDose(dose) {
 export async function sendSOS() {
   const p = st.patient, pl = PLACES[st.place || 0], at = Date.now();
   await be.updateDoc(path(), { sos: { active: true, at, address: pl.address } });
-  await be.addDoc(path() + '/alerts', { kind: 'danger', type: 'sos', at, read: false, title: 'SOS from ' + p.name, sub: pl.short + ' · pressed on ' + (p.self ? 'your' : 'their') + ' watch' });
+  await raise({ kind: 'danger', type: 'sos', at, read: false, title: 'SOS from ' + p.name, sub: pl.short + ' · pressed on ' + (p.self ? 'your' : 'their') + ' watch' });
 }
 
 export const clearPing = () => be.updateDoc(path(), { ping: null });
@@ -288,7 +295,7 @@ function checkDoses() {
     const key = day + d.id;
     if (late >= 30 && late < 90 && !missedSent[key]) {
       missedSent[key] = true;
-      be.addDoc(path() + '/alerts', { kind: 'warn', type: 'dose', at: Date.now(), read: false, title: 'Missed dose', sub: `${p.name} · ${d.name} at ${d.time}` });
+      raise({ kind: 'warn', type: 'dose', at: Date.now(), read: false, title: 'Missed dose', sub: `${p.name} · ${d.name} at ${d.time}` });
     }
   }
 }

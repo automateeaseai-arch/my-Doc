@@ -26,3 +26,4 @@ jobs:
           URL="https://mydoc-push.$(wrangler whoami >/dev/null; curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | node -pe 'JSON.parse(require("fs").readFileSync(0)).result.subdomain').workers.dev"
           echo "Push service: $URL"
           sleep 5; curl -s "$URL/key"; echo
+          node selftest.mjs "$URL" AIzaSyCW0aF3RmJ1sfB6eePVVR_EtD2ahhiYcuE mydoc-e6243
