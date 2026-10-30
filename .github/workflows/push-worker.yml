@@ -1,0 +1,28 @@
+# Installs the push service (push/) on Cloudflare's free Workers plan.
+name: Push service
+on:
+  push:
+    branches: [main]
+    paths: ['push/**', '.github/workflows/push-worker.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: push } }
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i -g wrangler@3.80.0
+      - run: wrangler deploy
+      - name: Create the signing key once
+        run: |
+          if wrangler secret list | grep -q VAPID_JWK; then echo "key exists"; else node make-key.mjs | wrangler secret put VAPID_JWK; fi
+      - name: Check
+        run: |
+          URL="https://mydoc-push.$(wrangler whoami >/dev/null; curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain | node -pe 'JSON.parse(require("fs").readFileSync(0)).result.subdomain').workers.dev"
+          echo "Push service: $URL"
+          sleep 5; curl -s "$URL/key"; echo

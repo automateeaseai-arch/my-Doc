@@ -1,0 +1,8 @@
+name = "mydoc-push"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT = "mydoc-e6243"
+CONTACT = "https://automateeaseai-arch.github.io/my-Doc/"
