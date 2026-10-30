@@ -15,12 +15,12 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then(save)));
 });
 
-// Alerts while myDoc is closed (sent by the myDoc push service). If myDoc is open and
-// visible, the app shows the alert itself.
+// Alerts from the myDoc push service (open or closed app). The open app shows the same
+// alert with the same tag, so the phone keeps one notification.
 self.addEventListener('push', (e) => {
   const m = e.data ? e.data.json() : { title: 'myDoc', body: 'New alert' };
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
-    if (cs.some((c) => c.visibilityState === 'visible' && !c.url.includes('watch.html'))) return;
+  e.waitUntil(self.registration.getNotifications({ tag: m.tag }).then((shown) => {
+    if (m.tag && shown.length) return; // the open app already showed it
     return self.registration.showNotification(m.title, { body: m.body, tag: m.tag || undefined, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || './' }, requireInteraction: !!m.urgent, vibrate: m.urgent ? [400, 150, 400, 150, 400] : [200, 100, 200] });
   }));
 });

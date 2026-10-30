@@ -196,8 +196,9 @@ const alerted = {}; // metric -> time of last alert, so a long spike alerts once
 
 // Save an alert for the caregivers and push it to their phones (even when myDoc is closed).
 async function raise(a) {
-  await be.addDoc(path() + '/alerts', a);
-  sendPush(st.pid, { type: a.type, title: a.title, body: a.sub, tag: a.type + (a.k || ''), urgent: a.type === 'sos', url: a.type === 'sos' ? `./#/p/${st.pid}/locate` : './#/alerts' });
+  const id = await be.addDoc(path() + '/alerts', a);
+  // same tag as the app uses, so an open app and the push don't show it twice
+  sendPush(st.pid, { type: a.type, title: a.title, body: a.sub, tag: st.pid + id, urgent: a.type === 'sos', url: a.type === 'sos' ? `./#/p/${st.pid}/locate` : './#/alerts' });
 }
 
 export async function sendReading(k, r) {

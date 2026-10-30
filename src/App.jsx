@@ -43,6 +43,19 @@ function screen(route, live) {
 
 // New alerts that arrive while the app is open: a message on screen, a buzz,
 // and a phone notification if the user allowed them.
+// A real phone notification (sound and vibration, like a text message). Phones only allow
+// these through the service worker; the push service uses the same tag, so it shows once.
+async function phoneAlert(a, key) {
+  const sos = a.type === 'sos', route = sos ? `/p/${a.pid}/locate` : '/alerts';
+  const opts = { body: a.sub, icon: 'icon-192.png', badge: 'icon-192.png', tag: key, requireInteraction: sos, vibrate: sos ? [400, 150, 400, 150, 400] : [200, 100, 200], data: { url: './#' + route } };
+  try {
+    const reg = 'serviceWorker' in navigator && (await navigator.serviceWorker.getRegistration());
+    if (reg) { await reg.showNotification(a.title, opts); return; }
+    const n = new Notification(a.title, opts);
+    n.onclick = () => { window.focus(); go(route); };
+  } catch { /* notifications not allowed here: the toast and vibration still show */ }
+}
+
 function useAlertNotices(live, settings) {
   const since = useRef(Date.now());
   const seen = useRef(new Set());
@@ -58,12 +71,7 @@ function useAlertNotices(live, settings) {
       if (settings.quiet && (h >= 22 || h < 6) && a.type !== 'sos') continue;
       toast(a.title + ' · ' + a.sub);
       if (navigator.vibrate) navigator.vibrate(a.type === 'sos' ? [400, 150, 400, 150, 400] : [200, 100, 200]);
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
-          const n = new Notification(a.title, { body: a.sub, icon: 'icon-192.png', tag: key, requireInteraction: a.type === 'sos' });
-          n.onclick = () => { window.focus(); go(a.type === 'sos' ? `/p/${a.pid}/locate` : '/alerts'); };
-        } catch { /* some phones only allow notifications from the service worker */ }
-      }
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') phoneAlert(a, key);
     }
   });
 }
