@@ -110,6 +110,12 @@ export const signInGoogle = async () => fail('auth/operation-not-supported-in-th
 export const resetPassword = async () => fail('auth/operation-not-supported-in-this-environment');
 export const signOut = async () => setSession(null);
 export const idToken = async () => null; // this-phone-only copy: no push service
+export const deleteAccount = async () => {
+  const users = read(USERS_KEY, {});
+  for (const [k, u] of Object.entries(users)) if (current && u.uid === current.uid) delete users[k];
+  write(USERS_KEY, users);
+  setSession(null);
+};
 export const setName = async (name) => {
   const users = read(USERS_KEY, {});
   for (const u of Object.values(users)) if (current && u.uid === current.uid) u.name = name;

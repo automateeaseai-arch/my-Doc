@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS, initials } from '../health.js';
 import CarerFace, { CarerUnlinked } from './Carer.jsx';
 
@@ -50,7 +50,8 @@ function Setup({ t }) {
       <button type="button" onClick={() => { startReplace(); setStep('replace'); }} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>REPLACING MY WATCH</span><span style={{ fontSize: 10, color: t.muted }}>Keep my history and caregivers</span></button>
     </div>
   );
-  if (step === 'replace') return <ReplaceCode t={t} onBack={() => setStep('newold')} />;
+  if (step === 'replace') return <ReplaceCode t={t} onBack={() => setStep('newold')} onRecover={() => setStep('recover')} />;
+  if (step === 'recover') return <Recover t={t} input={input} onBack={() => { startReplace(); setStep('replace'); }} />;
   if (step === 'role') return (
     <div style={face(t, 'padding: 8px 14px 12px; gap: 8px; align-items: stretch; text-align: left')}>
       <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
@@ -100,7 +101,25 @@ function Setup({ t }) {
   );
 }
 
-function ReplaceCode({ t, onBack }) {
+// New watch, no caregiver: type the recovery code written down at setup.
+function Recover({ t, input, onBack }) {
+  const [code, setCode] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => { setBusy(true); setErr(await recoverWithCode(code)); setBusy(false); };
+  return (
+    <div style={face(t, 'padding: 4px 14px 12px; gap: 6px; align-items: stretch')}>
+      <div style={s('display: flex; width: 100%; align-items: center; justify-content: space-between')}><Back t={t} onClick={onBack} /><WLogo t={t} /><span style={s('width: 32px')} /></div>
+      <label htmlFor="w-recover" style={s('font-family: Marcellus, serif; font-size: 13px; letter-spacing: 0.3px')}>RECOVERY CODE</label>
+      <input id="w-recover" value={code} autoCapitalize="characters" autoComplete="off" maxLength={9} placeholder="ABCD-1234" onChange={(e) => { setErr(''); const c = cleanCode(e.target.value).slice(0, 8); setCode(c.length > 4 ? c.slice(0, 4) + '-' + c.slice(4) : c); }} style={{ ...input, height: 34, fontSize: 16, fontWeight: 800, letterSpacing: 2, textAlign: 'center' }} />
+      <span role={err ? 'alert' : undefined} style={{ fontSize: 10, lineHeight: 1.4, color: err ? t.red : t.muted }}>{err || 'The code you wrote down when you first set up myDoc.'}</span>
+      <div style={s('flex-grow: 1')} />
+      <button type="button" disabled={busy || cleanCode(code).length !== 8} onClick={go} style={{ ...s(wbtn + '; height: 34px; border-radius: 12px; font-size: 12px; font-weight: 800'), background: cleanCode(code).length === 8 ? '#2BB5B0' : t.box, color: '#14202B' }}>{busy ? 'CHECKING…' : 'MOVE ME TO THIS WATCH'}</button>
+    </div>
+  );
+}
+
+function ReplaceCode({ t, onBack, onRecover }) {
   const st = useSim();
   const code = st.code || '······';
   return (
@@ -112,6 +131,7 @@ function ReplaceCode({ t, onBack }) {
       </span>
       <span style={{ fontSize: 10, lineHeight: 1.4, color: t.muted, marginTop: 2 }}>Ask your caregiver to type this code in myDoc on their phone: Add a person.</span>
       <div style={s('flex-grow: 1')} />
+      <button type="button" onClick={onRecover} style={{ ...s('border: 0; background: transparent; padding: 2px; font-size: 10px; font-weight: 800; font-family: inherit; cursor: pointer; text-decoration: underline'), color: t.teal }}>NO CAREGIVER? USE RECOVERY CODE</button>
       <span style={{ ...s('display: flex; align-items: center; gap: 6px; font-size: 10px'), color: t.muted }}>Waiting <span className="md-dot" /><span className="md-dot" style={{ animationDelay: '0.2s' }} /><span className="md-dot" style={{ animationDelay: '0.4s' }} /></span>
     </div>
   );
@@ -154,6 +174,29 @@ function Face({ st, t }) {
   const latest = (k) => p.recent && p.recent[k] && p.recent[k][0];
   const bad = ['sugar', 'bp', 'hr', 'o2'].find((k) => latest(k) && statusOf(k, latest(k).v) !== 'Normal');
 
+  if (st.showRecovery && st.recovery) return (
+    <div style={face(t, 'padding: 8px 12px 10px; gap: 5px')}>
+      <WLogo t={t} />
+      <span style={s('font-family: Marcellus, serif; font-size: 14px; letter-spacing: 0.3px; margin-top: 4px')}>YOUR RECOVERY CODE</span>
+      <span aria-label={'Recovery code ' + st.recovery.split('').join(' ')} style={{ ...s('padding: 6px 10px; border-radius: 10px; font-size: 20px; font-weight: 800; letter-spacing: 2px'), background: t.box, border: '1px solid ' + t.boxLine }}>{showCode(st.recovery)}</span>
+      <span style={{ fontSize: 10, lineHeight: 1.4, color: t.muted }}>Write it down and keep it safe. If you lose this watch, it moves your record to a new one, even with no caregiver.</span>
+      <div style={s('flex-grow: 1')} />
+      <button type="button" onClick={() => setOption({ showRecovery: false })} style={s(wbtn + '; height: 32px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 11px; font-weight: 800')}>I'VE WRITTEN IT DOWN</button>
+    </div>
+  );
+
+  if (screen === 'delete') return (
+    <div style={face(t, 'padding: 8px 12px 10px; gap: 5px')}>
+      <WLogo t={t} />
+      <span style={{ ...s('font-family: Marcellus, serif; font-size: 14px; letter-spacing: 0.3px; margin-top: 4px'), color: t.red }}>DELETE ALL YOUR DATA?</span>
+      <span style={{ fontSize: 10, lineHeight: 1.4, color: t.muted }}>Your readings, medicine, alerts and location are erased for good, and your caregivers lose access. This can't be undone.</span>
+      <div style={s('flex-grow: 1')} />
+      <button type="button" onClick={async () => { setScreen('deleting'); await deleteMyData(); setScreen('home'); }} style={{ ...s(wbtn + '; height: 32px; border-radius: 12px; color: #FFFFFF; font-size: 11px; font-weight: 800'), background: t.red }}>YES, DELETE EVERYTHING</button>
+      <button type="button" onClick={() => setScreen('settings')} style={{ ...s(wbtn + '; height: 28px; border-radius: 12px; background: transparent; font-size: 11px; font-weight: 800'), color: t.fg }}>NO, KEEP IT</button>
+    </div>
+  );
+  if (screen === 'deleting') return <div style={face(t, 'justify-content: center; gap: 6px')}><WLogo t={t} /><span style={{ fontSize: 11, color: t.muted }}>Deleting…</span></div>;
+
   if (st.welcomeBack != null && st.welcomeBack !== '' ) return (
     <div style={face(t, 'padding: 8px 14px 12px; gap: 6px')}>
       <WLogo t={t} />
@@ -167,14 +210,17 @@ function Face({ st, t }) {
 
   // Settings (patient): pair with a caregiver, my caregivers, theme.
   if (screen === 'settings') return (
-    <div style={face(t, 'padding: 4px 10px 10px; gap: 6px; align-items: stretch; text-align: left')}>
-      <div style={s('display: flex; align-items: center; justify-content: space-between')}><Back t={t} onClick={() => setScreen('home')} /><span style={s('font-family: Marcellus, serif; font-size: 14px')}>SETTINGS</span><span style={s('width: 32px')} /></div>
-      <button type="button" onClick={() => { startPairing(); setScreen('pair'); }} style={s(wbtn + '; height: 40px; border-radius: 14px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>PAIR WITH A CAREGIVER</button>
-      <button type="button" onClick={() => setScreen('carers')} style={{ ...s(wbtn + '; height: 36px; border-radius: 12px; background: transparent; font-size: 11px; font-weight: 800; justify-content: space-between; padding: 0 12px'), border: '1.5px solid ' + t.line, color: t.fg }}><span>MY CAREGIVERS</span><span style={{ color: t.teal }}>{names.length}</span></button>
-      <div style={{ ...s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 12px'), background: t.box }}>
+    <div style={{ ...face(t, 'padding: 4px 10px 10px; gap: 6px; align-items: stretch; text-align: left; overflow-y: auto'), scrollbarWidth: 'none' }}>
+      <div style={s('display: flex; flex-shrink: 0; align-items: center; justify-content: space-between')}><Back t={t} onClick={() => setScreen('home')} /><span style={s('font-family: Marcellus, serif; font-size: 14px')}>SETTINGS</span><span style={s('width: 32px')} /></div>
+      <button type="button" onClick={() => { startPairing(); setScreen('pair'); }} style={s(wbtn + '; flex-shrink: 0; height: 40px; border-radius: 14px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>PAIR WITH A CAREGIVER</button>
+      <button type="button" onClick={() => setScreen('carers')} style={{ ...s(wbtn + '; flex-shrink: 0; height: 36px; border-radius: 12px; background: transparent; font-size: 11px; font-weight: 800; justify-content: space-between; padding: 0 12px'), border: '1.5px solid ' + t.line, color: t.fg }}><span>MY CAREGIVERS</span><span style={{ color: t.teal }}>{names.length}</span></button>
+      <div style={{ ...s('display: grid; flex-shrink: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 12px'), background: t.box }}>
         {['light', 'dark'].map((k) => <button key={k} type="button" onClick={() => setOption({ theme: k })} style={{ ...s(wbtn + '; height: 26px; border-radius: 9px; font-size: 11px; font-weight: 700'), background: (st.theme || 'light') === k ? '#2BB5B0' : 'transparent', color: (st.theme || 'light') === k ? '#14202B' : t.fg }}>{k === 'light' ? 'Light' : 'Dark'}</button>)}
       </div>
       <div style={s('display: flex; align-items: center; justify-content: space-between; font-size: 11px')}><span>Emergency number</span><b style={{ color: t.red }}>112</b></div>
+      <button type="button" onClick={() => (st.recovery ? setOption({ showRecovery: true }) : makeRecovery())} style={{ ...s(wbtn + '; flex-shrink: 0; height: 30px; border-radius: 12px; background: transparent; font-size: 11px; font-weight: 800'), border: '1.5px solid ' + t.line, color: t.fg }}>{st.recovery ? 'RECOVERY CODE' : 'MAKE A RECOVERY CODE'}</button>
+      <button type="button" onClick={() => setScreen('delete')} style={{ ...s(wbtn + '; flex-shrink: 0; height: 26px; border-radius: 12px; background: transparent; font-size: 10px; font-weight: 800'), color: t.red }}>DELETE MY DATA</button>
+      <a href="./privacy.html" target="_blank" rel="noopener" style={{ ...s('flex-shrink: 0; text-align: center; font-size: 10px; font-weight: 700'), color: t.muted }}>Privacy</a>
     </div>
   );
 

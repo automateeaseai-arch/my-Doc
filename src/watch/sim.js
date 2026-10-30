@@ -44,7 +44,7 @@ export const SCENARIOS = {
 
 let st = { ready: false, uid: null, code: null, pid: null, patient: null, today: {}, linked: false, lost: false, ...load() };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, optical: st.optical, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
+const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, recovery: st.recovery, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, optical: st.optical, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
 export const getSim = () => st;
 export const onSim = (f) => { subs.add(f); return () => subs.delete(f); };
 export const setOption = (patch) => set(patch);
@@ -80,6 +80,57 @@ export async function finishSetup({ name, conds, contacts }) {
   });
   set({ setup: { done: true, role: 'patient' }, pid });
   follow(true);
+  await makeRecovery(name);
+}
+
+// ---- recovery code (for a patient with no caregiver to move them to a new watch) -----------
+// 8 letters/digits the patient writes down. Only a hash is stored (recovery/{hash}); typing the
+// code on a new watch proves it is them (see firestore.rules).
+const LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const cleanCode = (c) => String(c).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+const recoveryKey = async (code) => {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mydoc-recovery:' + cleanCode(code)));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+export async function makeRecovery(name) {
+  const r = crypto.getRandomValues(new Uint8Array(8));
+  const code = [...r].map((b) => LETTERS[b % LETTERS.length]).join('');
+  await be.setDoc('recovery/' + (await recoveryKey(code)), { pid: st.pid, watchUid: st.uid, name: name || (st.patient && st.patient.name) || '', createdAt: Date.now() });
+  set({ recovery: code, showRecovery: true });
+}
+export const showCode = (c) => (c ? c.slice(0, 4) + '-' + c.slice(4) : '');
+// New watch: move the person here with their recovery code. Returns '' or an error message.
+export async function recoverWithCode(code) {
+  if (cleanCode(code).length !== 8) return 'The code has 8 letters and numbers';
+  const key = await recoveryKey(code);
+  const r = await be.getDoc('recovery/' + key).catch(() => null);
+  if (!r || !r.pid) return 'Code not found. Check it and try again';
+  stopPairing();
+  try {
+    await be.updateDoc('patients/' + r.pid, { watchUid: st.uid, recoverKey: key, watchInfo: { battery: st.battery, lastSeen: Date.now() } });
+  } catch { return 'Could not move your record. Check the connection'; }
+  set({ pid: r.pid, recovery: cleanCode(code), setup: { done: true, role: 'patient' }, welcomeBack: r.name || 'You' });
+  follow(true);
+  return '';
+}
+
+// Settings › Delete my data: erases the person's record and history for good.
+export async function deleteMyData() {
+  const pid = st.pid;
+  if (!pid) return;
+  stop(); stopPairing();
+  for (const sub of ['readings', 'alerts', 'doselog', 'push']) {
+    for (;;) {
+      const docs = await be.getCol(`patients/${pid}/${sub}`, { limit: 200 }).catch(() => []);
+      if (!docs.length) break;
+      await Promise.all(docs.map((d) => be.deleteDoc(`patients/${pid}/${sub}/${d.id}`).catch(() => {})));
+      if (docs.length < 200) break;
+    }
+  }
+  if (st.recovery) await be.deleteDoc('recovery/' + (await recoveryKey(st.recovery))).catch(() => {});
+  await be.deleteDoc('patients/' + pid);
+  set({ recovery: null });
+  resetWatch();
 }
 
 function follow(fresh) {
@@ -184,7 +235,7 @@ function startCarer() {
 // Simulator only: forget this watch and start setup again.
 export function resetWatch() {
   stop(); stopPairing();
-  set({ setup: null, code: null, pid: null, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
+  set({ setup: null, code: null, pid: null, recovery: null, showRecovery: false, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
   if (carerStarted) location.reload(); // drop the caregiver's live data
 }
 

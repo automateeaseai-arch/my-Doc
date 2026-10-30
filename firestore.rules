@@ -19,6 +19,16 @@ service cloud.firestore {
       return exists(c) && get(c).data.role == 'replace' && get(c).data.watchUid == request.resource.data.watchUid;
     }
 
+    // Recovery code (a patient with no caregiver): the new watch shows it knows the code by
+    // naming its hash, which is the id of a recovery document pointing at this person.
+    function isRecovery(pid) {
+      let k = request.resource.data.get('recoverKey', '');
+      let r = /databases/$(database)/documents/recovery/$(k);
+      return signedIn() && k != '' && exists(r) && get(r).data.pid == pid
+        && request.resource.data.watchUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['watchUid', 'recoverKey', 'watchInfo']);
+    }
+
     // Each caregiver's own details: only they can read or change them.
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
@@ -26,19 +36,51 @@ service cloud.firestore {
 
     match /patients/{pid} {
       // Created by the patient's watch during its setup.
-      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid
+        && request.resource.data.carers.size() == 0;
       allow read: if isCarer(resource.data) || isWatch(resource.data);
       // Caregivers may update, but only the watch may add caregivers (consent).
       allow update: if isWatch(resource.data)
         || (isCarer(resource.data)
             && (request.resource.data.watchUid == resource.data.watchUid || isReplacement())
             && (!('carers' in request.resource.data.diff(resource.data).affectedKeys())
-                || request.resource.data.carers.hasOnly(resource.data.carers.concat(myWatches()))));
+                || request.resource.data.carers.hasOnly(resource.data.carers.concat(myWatches()))))
+        || isRecovery(pid);
       allow delete: if isWatch(resource.data);
 
-      match /{sub}/{doc} {
+      // Readings come only from the watch.
+      match /readings/{id} {
+        allow read: if isCarer(patient(pid)) || isWatch(patient(pid));
+        allow write: if isWatch(patient(pid));
+      }
+      // Alerts are raised by the watch; caregivers may only mark them read.
+      match /alerts/{id} {
+        allow read: if isCarer(patient(pid)) || isWatch(patient(pid));
+        allow create, delete: if isWatch(patient(pid));
+        allow update: if isWatch(patient(pid))
+          || (isCarer(patient(pid)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      }
+      // Doses taken: ticked on the watch or by a caregiver.
+      match /doselog/{day} {
         allow read, write: if isCarer(patient(pid)) || isWatch(patient(pid));
       }
+      // Phones that get alerts: each caregiver manages only their own; the watch (and the
+      // push service acting for it) reads them and removes stale ones.
+      match /push/{id} {
+        allow read, delete: if isWatch(patient(pid))
+          || (isCarer(patient(pid)) && resource.data.uid == request.auth.uid);
+        allow create, update: if isCarer(patient(pid)) && request.resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // Recovery codes (only their hash is stored). Made by the person's own watch; read by
+    // whoever knows the code; never listed.
+    match /recovery/{key} {
+      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid
+        && patient(request.resource.data.pid).watchUid == request.auth.uid;
+      allow get: if signedIn();
+      allow delete: if signedIn() && (resource.data.watchUid == request.auth.uid
+        || (exists(/databases/$(database)/documents/patients/$(resource.data.pid)) && patient(resource.data.pid).watchUid == request.auth.uid));
     }
 
     // Pairing codes: a watch creates one; whoever types it can ask (request) or link.

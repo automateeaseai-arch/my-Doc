@@ -178,9 +178,17 @@ export async function stopMonitoring(p) {
   const names = { ...(p.carerNames || {}) }, groups = { ...(p.carerGroups || {}) };
   delete names[a.uid]; delete groups[a.uid];
   // this caregiver's phones stop getting alerts for this person
-  const subs = await be.getCol(`patients/${p.id}/push`).catch(() => []);
-  await Promise.all(subs.filter((x) => x.uid === a.uid).map((x) => be.deleteDoc(`patients/${p.id}/push/${x.id}`).catch(() => {})));
+  const subs = await be.getCol(`patients/${p.id}/push`, { where: ['uid', '==', a.uid] }).catch(() => []);
+  await Promise.all(subs.map((x) => be.deleteDoc(`patients/${p.id}/push/${x.id}`).catch(() => {})));
   await be.updateDoc('patients/' + p.id, { carers: (p.carers || []).filter((x) => !group.includes(x)), carerNames: names, carerGroups: groups });
+}
+
+// Profile › Delete my account: stop monitoring everyone, erase the profile, then the account.
+// Firebase may ask for a fresh sign-in first (error code auth/requires-recent-login).
+export async function deleteMyAccount() {
+  for (const p of state.raw) await stopMonitoring(p).catch(() => {});
+  await be.deleteDoc('users/' + me().uid);
+  await be.deleteAccount();
 }
 
 // The caregiver's own watch: it joins every person they look after (and new ones).

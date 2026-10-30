@@ -50,6 +50,12 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Recovery, privacy and deleting data
+- **Recovery code:** shown on the watch after setup (and in watch Settings). It is stored only as a hash (`recovery/{sha256}`); a new watch types it (Replacing my watch → No caregiver? Use recovery code) to move the person over. Rules allow that move only with a matching code, and only `watchUid`, `recoverKey`, `watchInfo` may change.
+- **Privacy notice:** `public/privacy.html`, linked from Welcome, Sign up, Profile and watch Settings.
+- **Delete:** caregivers use Profile → Delete my account and data (stops monitoring everyone, deletes the profile and the sign-in; Firebase may ask for a fresh sign-in). Patients use watch Settings → Delete my data (readings, alerts, doses, phones, recovery code, then the record).
+- **Rules:** readings come only from the watch; caregivers can only mark alerts read; each caregiver sees only their own push subscriptions. Tested on the Firestore emulator (48 checks).
+
 ## Alerts when the app is closed (`push/`, `src/push.js`)
 Free, no card: a Cloudflare Worker (`push/worker.js`) at https://mydoc-push.automateeaseai.workers.dev sends standard Web Push.
 - Caregiver: Profile → **Alerts when myDoc is closed**. The phone's subscription and alert settings are saved under each person (`patients/{pid}/push/{uid_device}`).

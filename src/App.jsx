@@ -4,7 +4,7 @@ import { useStore } from './store.js';
 import { useLive } from './live.js';
 import { savePush } from './push.js';
 import { Splash, Welcome, SignIn, SignUp, About, Setup, Pair, Paired } from './screens/start.jsx';
-import { Home, Alerts, Summary, Profile } from './screens/home.jsx';
+import { Home, Alerts, Summary, Profile, DeleteAccount } from './screens/home.jsx';
 import { Vitals, Reading, Call, Locate, Sent, Meds, Serotonin } from './screens/person.jsx';
 
 function screen(route, live) {
@@ -26,6 +26,7 @@ function screen(route, live) {
     case 'alerts': return <Alerts />;
     case 'summary': return <Summary />;
     case 'profile': return <Profile />;
+    case 'delete': return <DeleteAccount />;
     case 'p': {
       const p = live.people.find((x) => x.id === parts[1]);
       if (!p) return <Home />;

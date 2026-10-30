@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { s, A, Logo, Avatar, Toggle, Seg, Nav, I, btn, section, go, toast, useTwoTap } from '../ui.jsx';
 import { update, useStore, greeting, longDate } from '../store.js';
-import { useLive, markAlertsRead, METRICS, statusOf } from '../live.js';
+import { useLive, markAlertsRead, deleteMyAccount, METRICS, statusOf } from '../live.js';
 import * as be from '../backend/index.js';
 import { sugarText, dayKey, ago } from '../health.js';
 import { pushSupported, needsHomeScreen, enablePush, disablePush, pushIsOn } from '../push.js';
@@ -336,7 +336,8 @@ export function Profile() {
         <div style={s('display: flex; flex-direction: column; background: #FFFFFF; border-radius: 20px; padding: 2px 14px')}>
           <a href="./watch.html" target="_blank" rel="noopener" style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Open the watch simulator<I.chev size={18} color="#5B6672" /></a>
           <a href="./lab.html" target="_blank" rel="noopener" style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Open the Sensor Lab<I.chev size={18} color="#5B6672" /></a>
-          <button type="button" onClick={() => toast('Help: write to help@mydoc.app')} style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Help and support<I.chev size={18} color="#5B6672" /></button>
+          <a href="./privacy.html" target="_blank" rel="noopener" style={s(row + '; border-bottom: 1px solid #E4E8EC')}>Privacy notice<I.chev size={18} color="#5B6672" /></a>
+          {be.online && <A to="/delete" style={row + '; border-bottom: 1px solid #E4E8EC'}>Delete my account and data<I.chev size={18} color="#5B6672" /></A>}
           {!be.online && <button type="button" onClick={() => twoTap(() => { be.clearAll(); localStorage.removeItem('mydoc.prefs'); localStorage.removeItem('mydoc.watch'); go('/welcome'); })} style={s(row + '; border-bottom: 1px solid #E4E8EC' + (armed ? '; color: #A81C2B' : ''))}>{armed ? 'Tap again to delete all test data' : 'Delete all test data on this phone'}<I.chev size={18} color="#5B6672" /></button>}
           <button type="button" onClick={signOut} style={s(row + '; color: #A81C2B')}>Sign out</button>
         </div>
@@ -344,5 +345,44 @@ export function Profile() {
       </main>
       <Nav tab="profile" medsTo={sel ? '/p/' + sel.id + '/meds' : '/home'} />
     </div>
+  );
+}
+
+// Profile › Delete my account and data.
+export function DeleteAccount() {
+  const live = useLive();
+  const [armed, twoTap] = useTwoTap();
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      if (live.user) await disablePush(live.user.uid, live.people).catch(() => {});
+      await deleteMyAccount();
+      localStorage.removeItem('mydoc.prefs');
+      toast('Your account and data are deleted');
+      go('/welcome');
+    } catch (e) {
+      setBusy(false);
+      if (e.code === 'auth/requires-recent-login') { toast('For your safety, sign in again, then delete.'); await be.signOut(); go('/signin'); }
+      else toast('Could not delete. Check your connection and try again.');
+    }
+  };
+  return (
+    <main style={s('min-height: 100dvh; background: #F5F7F8; display: flex; flex-direction: column; gap: 16px; padding: 12px 24px 24px; box-sizing: border-box')}>
+      <div style={s('display: flex; align-items: center; height: 44px')}><A to="/profile" aria-label="Back" style="display: flex; color: #0B7A75"><I.back /></A></div>
+      <h1 style={s('margin: 0; font-size: 24px; font-weight: 700')}>Delete my account</h1>
+      <div style={s('display: flex; flex-direction: column; gap: 10px; padding: 16px; background: #FFFFFF; border-radius: 20px; font-size: 14px; line-height: 1.6')}>
+        <span>This erases, for good:</span>
+        <ul style={s('margin: 0; padding-left: 20px')}>
+          <li>your account and your details (name, phone, city)</li>
+          <li>your access to {live.people.length ? live.people.map((p) => p.name).join(', ') : 'the people you look after'}, including your own watch</li>
+          <li>alerts to this phone</li>
+        </ul>
+        <span style={s('color: #5B6672')}>The people you look after keep their own records on their watch; other caregivers are not affected. To erase a patient's own data, use Delete my data on their watch.</span>
+      </div>
+      <div style={s('flex-grow: 1')} />
+      <button type="button" disabled={busy} onClick={() => twoTap(run)} style={s('height: 56px; border: 0; border-radius: 16px; font-size: 16px; font-weight: 600; font-family: inherit; cursor: pointer; color: #FFFFFF; background: #D62839')}>{busy ? 'Deleting…' : armed ? 'Tap again to delete for good' : 'Delete my account and data'}</button>
+      <A to="/profile" style="display: flex; height: 48px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #0B7A75; text-decoration: none">Keep my account</A>
+    </main>
   );
 }

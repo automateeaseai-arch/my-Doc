@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F5F7F8">
+<title>myDoc privacy notice</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Poppins:wght@400;600;700&display=swap">
+<style>
+  :root { --ink: #14202B; --muted: #5B6672; --teal: #0B7A75; --red: #D62839; --mist: #F5F7F8; --line: #E4E8EC; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--mist); color: var(--ink); font-family: Poppins, system-ui, sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+  .logo { font-family: 'Kaushan Script', cursive; color: var(--red); line-height: 1; }
+  .logo span:first-child { font-size: 22px; } .logo span:last-child { font-size: 44px; }
+  h1 { font-size: 26px; margin: 12px 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  .date { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  section { background: #FFFFFF; border-radius: 20px; padding: 18px; margin-bottom: 14px; box-shadow: 0 6px 20px rgba(20,32,43,0.06); }
+  p, li { font-size: 15px; } p { margin: 0 0 8px; } p:last-child { margin-bottom: 0; }
+  ul { margin: 0; padding-left: 20px; }
+  .note { background: #FFF1DB; color: #8A5300; border-radius: 14px; padding: 12px 14px; font-size: 14px; margin-bottom: 14px; }
+  a { color: var(--teal); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo" aria-label="myDoc"><span>my</span><span>DOC</span></div>
+  <h1>Privacy notice</h1>
+  <p class="date">Last updated 30 October 2026 · plain language</p>
+
+  <div class="note"><b>myDoc is a research prototype and not a medical device.</b> It does not diagnose or treat anything. In an emergency, call 112. Blood-sugar estimates from the optical sensor are experimental.</div>
+
+  <section>
+    <h2>What myDoc is for</h2>
+    <p>myDoc lets a person wearing a smartwatch share their health readings with people they choose (their caregivers), so those caregivers get alerts when something is wrong.</p>
+  </section>
+
+  <section>
+    <h2>What we keep</h2>
+    <ul>
+      <li><b>Caregivers:</b> name, email, phone number, city and how you use myDoc.</li>
+      <li><b>The person wearing the watch:</b> name, health conditions, emergency contacts, medicine times, readings (blood sugar, blood pressure, heart rate, oxygen), alerts, whether doses were taken, the watch's battery, and its location when it last reported.</li>
+      <li><b>For alerts on a closed app:</b> a technical address for each phone that turned them on, and that caregiver's alert settings.</li>
+    </ul>
+    <p>We do not keep payment details. There are no adverts and no tracking or analytics tools.</p>
+  </section>
+
+  <section>
+    <h2>Who can see it</h2>
+    <ul>
+      <li>The person's own watch.</li>
+      <li>Only caregivers the person <b>accepted on their watch</b>. They can remove any caregiver at any time (watch → Settings → My caregivers).</li>
+      <li>Nobody else. We never sell or share health data with advertisers, insurers or employers.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Where it is stored</h2>
+    <ul>
+      <li>Accounts and health records: Google Firebase (Google Cloud), protected by sign-in and security rules that let only the watch and its accepted caregivers read a person's record.</li>
+      <li>Alerts to a closed app pass through a small service on Cloudflare. It stores nothing; the alert text is encrypted to each phone.</li>
+      <li>Some settings (units, which person is selected) stay on your own phone.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How long we keep it</h2>
+    <p>Until you delete it. Short summaries are kept for about 10 days of charts; readings and alerts stay until the person deletes their data. Pairing codes expire after 30 minutes.</p>
+  </section>
+
+  <section>
+    <h2>Your choices</h2>
+    <ul>
+      <li><b>Caregiver:</b> Profile → Delete my account and data. This removes your account, your details and your access to everyone you look after.</li>
+      <li><b>Person wearing the watch:</b> watch → Settings → Delete my data. This erases your readings, medicine, alerts and location for good, and your caregivers lose access.</li>
+      <li>Stop alerts on a phone: Profile → Alerts when myDoc is closed.</li>
+      <li>Stop monitoring someone: Profile → their name → Stop monitoring.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Research</h2>
+    <p>myDoc is being developed for further study. Data from this app is <b>not</b> used for research. Any future study will ask for separate, informed consent and will be approved by an ethics committee first.</p>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <p>Ask the myDoc team through the project page: <a href="https://github.com/automateeaseai-arch/my-Doc">github.com/automateeaseai-arch/my-Doc</a>. We will update this notice when myDoc changes and show the new date at the top.</p>
+  </section>
+
+  <p><a href="./">Back to myDoc</a></p>
+</main>
+</body>
+</html>

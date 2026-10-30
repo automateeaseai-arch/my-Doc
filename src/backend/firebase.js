@@ -2,7 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously,
-  GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile, signOut as fbSignOut
+  GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile, deleteUser, signOut as fbSignOut
 } from 'firebase/auth';
 import {
   initializeFirestore, persistentLocalCache, doc, collection, getDoc as fGet, getDocs, setDoc as fSet, updateDoc as fUpdate,
@@ -35,6 +35,8 @@ export const signInAnon = () => signInAnonymously(auth);
 export const signInGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 export const signOut = () => fbSignOut(auth);
+// Firebase asks for a recent sign-in first (error auth/requires-recent-login).
+export const deleteAccount = () => deleteUser(auth.currentUser);
 export const idToken = () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null));
 export const setName = async (name) => { await updateProfile(auth.currentUser, { displayName: name }); announce(); };
 export const clearAll = () => {};

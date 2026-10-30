@@ -40,6 +40,7 @@ export function Welcome() {
       <div style={s('display: flex; flex-direction: column; gap: 8px; position: relative')}>
         <A to="/signup" style={btn.primary}>Get started</A>
         <A to="/signin" style="display: flex; height: 48px; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #0B7A75; text-decoration: none">I already have an account</A>
+        <a href="./privacy.html" style={s('text-align: center; font-size: 13px; color: #5B6672')}>Privacy</a>
       </div>
     </main>
   );
@@ -148,6 +149,7 @@ export function SignUp() {
       </div>
       <Err msg={err} />
       <button type="submit" disabled={busy} style={s(btn.primary + (busy ? '; opacity: 0.7' : ''))}>{busy ? 'Creating account…' : 'Create account'}</button>
+      <div style={s('font-size: 12px; line-height: 1.5; color: #5B6672; text-align: center')}>By creating an account you agree to how myDoc handles health data: <a href="./privacy.html" target="_blank" rel="noopener" style={s('font-weight: 600; color: #0B7A75')}>privacy notice</a>. myDoc is not a medical device.</div>
       {be.online && <button type="button" onClick={google} style={s(outlineBig)}>Continue with Google</button>}
       {!be.online && <div style={s('font-size: 12px; line-height: 1.5; color: #8A5300; background: #FFF1DB; padding: 10px 12px; border-radius: 12px')}>Test mode: your account is kept on this phone only.</div>}
       <div style={s('flex-grow: 1')} />
