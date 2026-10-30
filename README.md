@@ -50,6 +50,13 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Alerts when the app is closed (`push/`, `src/push.js`)
+Free, no card: a Cloudflare Worker (`push/worker.js`) at https://mydoc-push.automateeaseai.workers.dev sends standard Web Push.
+- Caregiver: Profile → **Alerts when myDoc is closed**. The phone's subscription and alert settings are saved under each person (`patients/{pid}/push/{uid_device}`).
+- Watch: after saving an alert it calls `/send` with its Firebase sign-in; the worker reads the person's record as the watch (Firestore rules decide), and notifies only current caregivers, skipping alert types they turned off and quiet hours (SOS always rings).
+- Installed by `.github/workflows/push-worker.yml` (secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`); the signing key is created once as the worker secret `VAPID_JWK`; `push/selftest.mjs` checks the live service after each install.
+- iPhone: works only after Share → Add to Home Screen (iOS 16.4+).
+
 ## Sensor engine (`src/sensor/`, page `lab.html`)
 Software for an optical (spectrophotometric) wrist sensor, ready before the hardware exists. **Experimental: not for medical decisions.**
 - `engine.js`: light at 12 wavelengths (530–1690 nm) → absorbance, drift removal, movement cancelled with the accelerometer → pulse wave (heart rate, signal quality) → pulse spectrum (blood only) → oxygen (red/infrared ratio) and a blood-sugar estimate with ± and quality → personal calibration from finger-pricks → accuracy scoring (MARD, ±15%, Clarke error grid).
