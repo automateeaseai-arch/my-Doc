@@ -9,7 +9,7 @@
 //   → features → model → estimate with ± and quality
 //   → personal calibration from finger-prick readings.
 // Sources: sim.js (simulated sensor, no hardware) or device.js (Bluetooth sensor).
-// Not a medical device: estimates are for research and demonstration.
+// Estimates are experimental, for research and demonstration.
 
 // Hypothetical 12-wavelength wrist module (LEDs + photodiodes), in nanometres.
 // 530 green: pulse; 660/940 red/infrared: oxygen; 1450: water; 1550–1690: glucose bands.

@@ -129,7 +129,7 @@ export async function makeReport({ person: p, data, insights, carer, unit = 'mg'
 
   // ---- notes --------------------------------------------------------------------------------
   heading('About this report');
-  para('Readings come from the patient\'s myDoc watch and are shown as recorded. Normal ranges are general adult ranges; the doctor should judge them for this patient. AI early warnings compare the patient with their own usual readings and are decision support, not a diagnosis. myDoc is a research prototype and not a medical device.', 8.5, MUTED);
+  para('Readings come from the patient\'s myDoc watch and are shown as recorded. Normal ranges are general adult ranges; the doctor should judge them for this patient. AI early warnings compare the patient with their own usual readings and are decision support, not a diagnosis.', 8.5, MUTED);
   para('Questions: mydoc.health.team@gmail.com', 8.5, MUTED);
 
   // footer on every page
