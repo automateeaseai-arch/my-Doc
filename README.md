@@ -50,6 +50,10 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Doctor report (`src/report.js`, `src/reportPdf.js`, `src/screens/report.jsx`)
+Caregivers: the person's screen → **Doctor report** (7, 14 or 30 days; 14 by default). A preview with a graph per vital, then **Share PDF** (phone share sheet: WhatsApp, email…) or **Save PDF**. Made on the phone with jsPDF (loaded only when needed); nothing is uploaded.
+The A4 PDF: header and period, "At a glance" (averages, % in range, medicine adherence, alerts, AI early warnings), a vector graph per vital (every reading as a dot, red when out of range, open when an optical estimate; daily average line; shaded normal range; blood pressure shows both numbers), time-of-day pattern, medicine schedule and missed doses, alerts with times, and notes for the doctor.
+
 ## Early warning (AI) (`src/ai/`, `src/screens/ai.jsx`)
 Runs on the watch, free and offline (no cloud AI). It learns each person's own normal and warns caregivers before readings go out of range.
 - `insights.js`: personal baseline per metric and time of day (six slots, median and spread over days 4–14); unusual reading for this person; 3-day shift; trend over the last week (Theil–Sen on rhythm-adjusted daily averages) with a 3-day forecast of the highest (or lowest) time of day, and an early warning when it would cross the normal range within about 4 days; missed doses named as a reason. Every finding says why.

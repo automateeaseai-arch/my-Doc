@@ -6,6 +6,7 @@ import { savePush } from './push.js';
 import { Splash, Welcome, SignIn, SignUp, About, Setup, Pair, Paired } from './screens/start.jsx';
 import { Home, Alerts, Summary, Profile, DeleteAccount } from './screens/home.jsx';
 import { Vitals, Reading, Call, Locate, Sent, Meds, Serotonin } from './screens/person.jsx';
+import { Report } from './screens/report.jsx';
 
 function screen(route, live) {
   const [path, qs] = route.split('?');
@@ -36,6 +37,7 @@ function screen(route, live) {
       if (parts[2] === 'sent') return <Sent p={p} />;
       if (parts[2] === 'meds') return <Meds key={p.id} p={p} />;
       if (parts[2] === 'serotonin') return <Serotonin p={p} />;
+      if (parts[2] === 'report') return <Report key={p.id} p={p} />;
       return <Vitals p={p} />;
     }
     default: return <Home />;

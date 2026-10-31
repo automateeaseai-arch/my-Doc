@@ -74,6 +74,13 @@ export function Vitals({ p }) {
             })}
           </div>
         ) : <NoReadings p={p} />}
+        {keys.length > 0 && (
+          <A to={'/p/' + p.id + '/report'} style="display: flex; gap: 12px; align-items: center; padding: 14px; background: #FFFFFF; border-radius: 18px; text-decoration: none; color: #14202B; box-shadow: 0 6px 20px rgba(20,32,43,0.06)">
+            <span style={s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; background: #E3F5F3; color: #0B7A75; display: flex; align-items: center; justify-content: center')}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></svg></span>
+            <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 600')}>Doctor report</span><span style={s('font-size: 12px; color: #5B6672')}>Last 14 days as a PDF with graphs, to share with a doctor</span></span>
+            <I.chev color="#0B7A75" />
+          </A>
+        )}
         {p.conds.includes('Migraine') && (
           <A to={'/p/' + p.id + '/serotonin'} style="display: flex; gap: 12px; align-items: center; padding: 14px; background: #FFFFFF; border-radius: 18px; text-decoration: none; color: #14202B; box-shadow: 0 6px 20px rgba(20,32,43,0.06)">
             <span style={s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; background: #FFF1DB; color: #8A5300; display: flex; align-items: center; justify-content: center; font-weight: 800')}>5-HT</span>

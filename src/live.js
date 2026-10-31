@@ -191,6 +191,17 @@ export async function deleteMyAccount() {
   await be.deleteAccount();
 }
 
+// Doctor report: the person's readings, doses and alerts for the last `days` days.
+export async function loadReport(p, days = 14) {
+  const since = Date.now() - (days + 1) * 86400000;
+  const [readings, logs, alerts] = await Promise.all([
+    be.getCol(`patients/${p.id}/readings`, { where: ['at', '>=', since] }),
+    be.getCol(`patients/${p.id}/doselog`, { orderBy: ['day', 'desc'], limit: days + 1 }),
+    be.getCol(`patients/${p.id}/alerts`, { where: ['at', '>=', since] })
+  ]);
+  return { readings, doselog: Object.fromEntries(logs.map((d) => [d.day, d.taken || {}])), alerts };
+}
+
 // The caregiver's own watch: it joins every person they look after (and new ones).
 export async function linkCarerWatch(code, c) {
   const a = actor(), w = c.watchUid;
