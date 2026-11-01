@@ -143,9 +143,9 @@ function follow(fresh) {
     if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) || !!st.patient || st.replaced }); return; }
     set({ patient: p, lost: false });
     // a caregiver changed the safe zone: check again at once (alerts if now outside)
-    if (!fresh && p.zone && p.loc && p.loc.lat) {
-      const out = p.zone.on !== false && distance(p.zone, p.loc) > p.zone.r;
-      if (out !== !!(p.wander && p.wander.active)) moveTo(p.loc).catch(() => {});
+    if (!fresh && p.zone && p.loc && p.loc.lat && outside(p.zone, p.loc) !== !!(p.wander && p.wander.active) && Date.now() - lastRecheck > 3000) {
+      lastRecheck = Date.now();
+      setTimeout(() => moveTo(p.loc).catch(() => {}), 0);
     }
     if (fresh) { fresh = false; if (!p.loc || !p.zone) await setPlace(st.place || 0); await loadHistory(); if (!p.recent) await backfill(p); else { tick(); scheduleAnalysis(); } }
   }));
@@ -317,6 +317,8 @@ export async function setPlace(i) {
 }
 
 const TRAIL_MS = 6 * 3600000;
+const outside = (zone, pt) => zone.on !== false && distance(zone, pt) > zone.r;
+let lastRecheck = 0;
 export async function moveTo(pt, place) {
   const p = st.patient;
   if (!p) return;
@@ -332,7 +334,7 @@ export async function moveTo(pt, place) {
   const patch = { loc, trail, watchInfo: { battery: st.battery, lastSeen: at } };
   let zone = p.zone;
   if (!zone) { zone = { lat: pt.lat, lng: pt.lng, r: 100, on: true, label: 'Home', at }; patch.zone = zone; }
-  const away = Math.round(distance(zone, pt)), out = zone.on !== false && away > zone.r, was = !!(p.wander && p.wander.active);
+  const away = Math.round(distance(zone, pt)), out = outside(zone, pt), was = !!(p.wander && p.wander.active);
   if (out && !was) patch.wander = { active: true, since: at };
   if (!out && was) patch.wander = { active: false, since: p.wander.since, back: at };
   st.patient = { ...p, ...patch };
@@ -365,8 +367,8 @@ async function walkTo(to) {
   walking = setInterval(async () => {
     if (i >= steps.length) { stopWandering(); return; }
     const pt = steps[i++];
-    // the street name every few steps (the free service asks for at most one request a second)
-    const place = i % 6 === 1 || i === steps.length ? await streetName(pt) : null;
+    // the street name every third step (the free services ask for at most one request a second)
+    const place = i % 3 === 1 || i === steps.length ? await streetName(pt) : null;
     await moveTo(pt, place).catch(() => {});
   }, 2500);
 }
