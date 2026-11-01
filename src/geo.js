@@ -45,8 +45,21 @@ export async function walkingRoute(from, to) {
   return null;
 }
 
-// Street address for a point: { address, short } or null.
+// Street address for a point: { address, short } or null. Nominatim first, then Photon.
 export async function streetName(p) {
+  return (await nominatim(p)) || (await photon(p));
+}
+async function photon(p) {
+  try {
+    const j = await (await fetch(`https://photon.komoot.io/reverse?lat=${p.lat}&lon=${p.lng}&lang=en`)).json();
+    const a = (j.features && j.features[0] && j.features[0].properties) || {};
+    const road = [a.housenumber, a.street || a.name].filter(Boolean).join(' ');
+    const area = a.district || a.locality || a.city || '';
+    if (!road && !area) return null;
+    return { address: [road, area, a.city !== area ? a.city : ''].filter(Boolean).join(', '), short: [road || 'Near ' + area, road ? area : ''].filter(Boolean).join(', ') };
+  } catch { return null; }
+}
+async function nominatim(p) {
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.lat}&lon=${p.lng}&zoom=18&addressdetails=1`, { headers: { 'Accept-Language': 'en' } });
     const j = await r.json(), a = j.address || {};

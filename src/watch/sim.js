@@ -7,7 +7,7 @@ import { opticalSugar } from '../sensor/onwatch.js';
 import { sendPush } from '../push.js';
 import { analyze } from '../ai/insights.js';
 import { makeHistory } from '../ai/history.js';
-import { distance, offset, walkingRoute, streetName } from '../geo.js';
+import { distance, direction, metres, offset, walkingRoute, streetName } from '../geo.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -311,7 +311,7 @@ export async function setPlace(i) {
   if (!st.pid) return;
   const pl = PLACES[i], at = Date.now();
   const zone = { lat: pl.lat, lng: pl.lng, r: (st.patient && st.patient.zone && st.patient.zone.r) || 100, on: true, label: 'Home', at };
-  const patch = { loc: { ...pl, at }, zone, trail: [{ lat: pl.lat, lng: pl.lng, at }], wander: { active: false } };
+  const patch = { loc: { ...pl, namedAt: { lat: pl.lat, lng: pl.lng }, at }, zone, trail: [{ lat: pl.lat, lng: pl.lng, at }], wander: { active: false } };
   if (st.patient) st.patient = { ...st.patient, ...patch };
   await be.updateDoc(path(), patch);
 }
@@ -321,7 +321,13 @@ export async function moveTo(pt, place) {
   const p = st.patient;
   if (!p) return;
   const at = Date.now(), prev = p.loc || {};
-  const loc = { lat: pt.lat, lng: pt.lng, address: (place && place.address) || prev.address || '', short: (place && place.short) || prev.short || '', at };
+  // A street name stays valid within 60 m of where it was looked up; further away, and with no
+  // new name (the free service may not answer), describe the position from home instead.
+  const named = prev.namedAt && distance(prev.namedAt, pt) <= 60;
+  const fromHome = p.zone ? `About ${metres(distance(p.zone, pt))} ${direction(p.zone, pt)} of home` : prev.address || '';
+  const loc = place ? { lat: pt.lat, lng: pt.lng, address: place.address, short: place.short, namedAt: { lat: pt.lat, lng: pt.lng }, at }
+    : named ? { lat: pt.lat, lng: pt.lng, address: prev.address, short: prev.short, namedAt: prev.namedAt, at }
+    : { lat: pt.lat, lng: pt.lng, address: fromHome, short: fromHome, at };
   const trail = [...(p.trail || []).filter((t) => t.at > at - TRAIL_MS), { lat: pt.lat, lng: pt.lng, at }].slice(-300);
   const patch = { loc, trail, watchInfo: { battery: st.battery, lastSeen: at } };
   let zone = p.zone;
