@@ -9,7 +9,7 @@ import { distance, direction, metres, walkMinutes, walkingRoute, navigateUrl } f
 
 const RADII = [50, 100, 200, 500];
 
-function useMyPosition() {
+export function useMyPosition() {
   const [me, setMe] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => {

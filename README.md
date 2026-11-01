@@ -54,6 +54,7 @@ npm run build    # static files in dist/
 For people with dementia who wander. Free services only: OpenStreetMap tiles (Leaflet, loaded with the map), walking routes from the OSM routing servers (OSRM), street names from Nominatim, or Photon if Nominatim does not answer (otherwise "About 150 m north of home").
 - **Map:** the person's live pin (red when outside the safe zone), the safe zone circle around home, the path walked in the last 6 hours, your own position (phone GPS) and a walking route to them; distance, direction and minutes on foot. **Navigate** opens Google Maps turn-by-turn (walking; driving when over 3 km).
 - **Safe zone:** 100 m around home by default (50/100/200/500 m or off; home = their location or yours), stored on the record as `zone`. Leaving it raises an urgent `zone` alert (push, rings in quiet hours like SOS) and a banner on Home and their screen; coming back raises a calmer one. The watch records `wander` and the `trail`.
+- **Caregiver watch:** "Left the safe zone" buzzes like SOS with **Find**; the watch map shows the person, safe zone, trail and the watch's own position, distance and direction, and **GO** (Google Maps).
 - **Simulator:** Home picker (the zone is drawn around it), **Start wandering** (walks off along real streets at about 5× walking speed), **Walk back home**, **Stop walking**.
 
 ## Doctor report (`src/report.js`, `src/reportPdf.js`, `src/screens/report.jsx`)

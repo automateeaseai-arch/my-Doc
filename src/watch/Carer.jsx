@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { s } from '../ui.jsx';
 import { useLive, markAlertsRead, sendToWatch, requestLink, readCode, METRICS, statusOf } from '../live.js';
-import { ORDER, dayKey, ago } from '../health.js';
+import { ORDER, dayKey, ago, clock } from '../health.js';
+import { useMyPosition } from '../screens/locate.jsx';
+import { distance, direction, metres, walkMinutes, navigateUrl } from '../geo.js';
 import { setOption, resetWatch, startCarerLink } from './sim.js';
 
 // Extra colours the caregiver screens use, per watch theme (from the design files).
@@ -57,7 +59,7 @@ export default function CarerFace({ st, tBase }) {
 
   useNewAlerts(people, (a) => {
     if ((a.type === 'reading' && !toggles.r) || (a.type === 'dose' && !toggles.d)) return;
-    if (navigator.vibrate) navigator.vibrate(a.type === 'sos' ? [400, 150, 400, 150, 400] : [200, 100, 200]);
+    if (navigator.vibrate) navigator.vibrate(a.type === 'sos' || (a.type === 'zone' && a.kind === 'danger') ? [400, 150, 400, 150, 400] : [200, 100, 200]);
     go(a.type === 'dose' ? 'missed' : 'alert', { a, pid: a.p.id });
   });
   useEffect(() => {
@@ -94,14 +96,14 @@ export default function CarerFace({ st, tBase }) {
     return (
       <div style={base(t, 'padding: 6px 12px 8px; align-items: center; gap: 3px; text-align: center')}>
         <Logo t={t} />
-        <span className="md-wave" style={s('width: 56px; height: 56px; margin-top: 6px; border-radius: 28px; background: #D62839; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: ' + (a.type === 'sos' ? '15px' : '26px') + '; font-weight: 900')}>{a.type === 'sos' ? 'SOS' : '!'}</span>
+        <span className="md-wave" style={s('width: 56px; height: 56px; margin-top: 6px; border-radius: 28px; background: ' + (a.kind === 'danger' ? '#D62839' : '#2BB5B0') + '; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: ' + (a.type === 'sos' ? '15px' : '26px') + '; font-weight: 900')}>{a.type === 'sos' ? 'SOS' : a.type === 'zone' ? <Pin size={28} /> : '!'}</span>
         <span style={s(title + '; font-size: 12px; margin-top: 4px')}>{p.name.toUpperCase()} · {new Date(a.at).toTimeString().slice(0, 5)}</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: t.red }}>{a.title.replace(' from ' + p.name, '')}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: a.type === 'zone' && a.kind !== 'danger' ? t.teal : t.red }}>{a.type === 'zone' ? (a.kind === 'danger' ? 'Left the safe zone' : 'Back in the safe zone') : a.title.replace(' from ' + p.name, '')}</span>
         {r ? <span style={s('font-size: 24px; font-weight: 800; line-height: 1')}>{r.show}{k === 'o2' ? '%' : ''} <span style={s('font-size: 10px; font-weight: 800')}>{k === 'o2' ? 'SpO2' : METRICS[k].unit}</span></span> : <span style={{ fontSize: 11, color: t.muted }}>{p.shortAddress}</span>}
         <div style={s('flex-grow: 1')} />
         <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: 100%')}>
           <button type="button" onClick={() => go('call', { pid: p.id, from: 'people' })} style={s(btn + '; height: 36px; border-radius: 12px; background: #2BB5B0; color: #14202B; font-size: 12px; font-weight: 800')}>Call</button>
-          <button type="button" onClick={() => go('locate', { pid: p.id })} style={{ ...s(btn + '; height: 36px; border-radius: 12px; background: transparent; font-size: 12px; font-weight: 800'), border: '1.5px solid ' + t.btnLine, color: t.fg }}>locate</button>
+          <button type="button" onClick={() => go('locate', { pid: p.id })} style={{ ...s(btn + '; height: 36px; border-radius: 12px; font-size: 12px; font-weight: 800'), ...(a.type === 'zone' && a.kind === 'danger' ? { background: '#D62839', color: '#FFFFFF', border: 0 } : { background: 'transparent', border: '1.5px solid ' + t.btnLine, color: t.fg }) }}>{a.type === 'zone' ? 'Find' : 'locate'}</button>
         </div>
         <button type="button" onClick={() => go('people')} style={{ ...s('border: 0; background: transparent; font-size: 11px; font-weight: 600; padding: 4px 0; font-family: inherit; cursor: pointer'), color: t.muted }}>Dismiss</button>
       </div>
@@ -140,9 +142,9 @@ export default function CarerFace({ st, tBase }) {
           {all.map((a, k) => {
             const u = !a.read;
             return (
-              <button key={a.p.id + a.id} type="button" onClick={() => (a.type === 'sos' ? go('locate', { pid: a.p.id }) : a.type === 'dose' ? go('meds', { pid: a.p.id }) : a.k ? go('reading', { pid: a.p.id, k: a.k }) : go('vitals', { pid: a.p.id }))}
+              <button key={a.p.id + a.id} type="button" onClick={() => (a.type === 'sos' || a.type === 'zone' ? go('locate', { pid: a.p.id }) : a.type === 'dose' ? go('meds', { pid: a.p.id }) : a.k ? go('reading', { pid: a.p.id, k: a.k }) : go('vitals', { pid: a.p.id }))}
                 style={{ ...s('display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-radius: 10px; border: 0; text-align: left; font-family: inherit; cursor: pointer; flex-shrink: 0'), background: u ? t.unread : 'transparent', color: t.fg, borderBottom: k < all.length - 1 ? '1px solid ' + t.soft : 0 }}>
-                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 24px; height: 24px; flex-shrink: 0; border-radius: 12px; font-size: ' + (a.type === 'sos' ? '7px' : '13px') + '; font-weight: 900; display: flex; align-items: center; justify-content: center'), background: a.kind === 'danger' ? '#D62839' : t.amberTint, color: a.kind === 'danger' ? '#FFFFFF' : t.amberInk }}>{a.type === 'sos' ? 'SOS' : '!'}</span>
+                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 24px; height: 24px; flex-shrink: 0; border-radius: 12px; font-size: ' + (a.type === 'sos' ? '7px' : '13px') + '; font-weight: 900; display: flex; align-items: center; justify-content: center'), background: a.kind === 'danger' ? '#D62839' : t.amberTint, color: a.kind === 'danger' ? '#FFFFFF' : t.amberInk }}>{a.type === 'sos' ? 'SOS' : a.type === 'zone' ? <Pin size={14} /> : '!'}</span>
                 <span style={s('display: flex; flex-direction: column; flex-grow: 1; min-width: 0')}><span style={s('font-size: 11px; font-weight: 700; line-height: 1.2')}>{a.title}</span><span style={{ fontSize: 9, color: t.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.sub}</span></span>
                 <span style={{ fontSize: 9, color: t.muted }}>{dayKey(new Date(a.at)) === dayKey() ? new Date(a.at).toTimeString().slice(0, 5) : new Date(a.at).toLocaleDateString('en-GB', { weekday: 'short' })}</span>
               </button>
@@ -290,26 +292,8 @@ export default function CarerFace({ st, tBase }) {
     );
   }
 
-  // ---- locate (WCLocate) ----
-  if (nav.s === 'locate' && P(nav.pid)) {
-    const p = P(nav.pid), has = p.loc && p.loc.lat;
-    return (
-      <div style={{ ...base({ ...t, bg: t.map }), position: 'relative', overflow: 'hidden' }}>
-        <MapBg t={t} street={has ? p.address.split(',')[0].replace(/^\d+\s*/, '') : ''} area={has ? (p.address.split(',')[1] || '').trim() : ''} />
-        <div style={{ ...s('position: absolute; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; justify-content: center'), background: t.bg, boxShadow: t.bar }}>
-          <span style={s('position: absolute; left: 6px; top: 4px')}><Back t={t} onClick={() => go('vitals', { pid: p.id })} /></span>
-          <Logo t={t} size="lg" />
-        </div>
-        {has ? (
-          <div style={s('position: absolute; left: 0; right: 0; top: 92px; display: flex; flex-direction: column; align-items: center; gap: 4px')}>
-            <span className="md-pin" style={s('display: flex; color: #D62839')}><Pin size={30} /></span>
-            <span style={{ ...s('padding: 1px 8px; border-radius: 999px; font-size: 9px; font-weight: 700; white-space: nowrap'), background: t.chip, color: t.chipInk }}>{p.name} · {ago(p.loc.at)}</span>
-          </div>
-        ) : <span style={{ ...s('position: absolute; left: 16px; right: 16px; top: 100px; text-align: center; font-size: 11px'), color: t.fg }}>No location yet.</span>}
-        <button type="button" aria-label={'Share ' + p.her + ' location'} onClick={() => go('call', { pid: p.id, over: 'map' })} style={{ ...s('position: absolute; right: 10px; bottom: 10px; display: flex; width: 44px; height: 44px; border-radius: 22px; align-items: center; justify-content: center; border: 0; cursor: pointer; box-shadow: 0 6px 14px rgba(0,0,0,0.3)'), background: t.fab }}><Share /></button>
-      </div>
-    );
-  }
+  // ---- locate (WCLocate): real map, safe zone, distance from this watch, navigate ----
+  if (nav.s === 'locate' && P(nav.pid)) return <WatchLocate t={t} p={P(nav.pid)} onBack={() => go('vitals', { pid: nav.pid })} onShare={() => go('call', { pid: nav.pid, over: 'map' })} />;
 
   // ---- daily summary (WCSummary) ----
   if (nav.s === 'summary') {
@@ -393,6 +377,64 @@ export default function CarerFace({ st, tBase }) {
         <div style={s('display: flex; align-items: center; gap: 4px')}>{cards.map((q, k) => <span key={q.id} style={{ borderRadius: 6, width: k === idx ? 12 : 7, height: k === idx ? 12 : 7, background: k === idx ? '#D62839' : t.dotOff }} />)}</div>
         <button type="button" onClick={() => setI((idx + 1) % m)} aria-label="Next person" style={{ ...s('width: 32px; height: 32px; border: 0; background: transparent; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center'), color: t.teal }}><Chev /></button>
       </div>
+    </div>
+  );
+}
+
+// A small live map (OpenStreetMap) for the watch face: the person, the safe zone, their trail
+// and this watch's own position. It frames itself; no dragging on a watch screen.
+function WatchMap({ p, me }) {
+  const box = useRef(null), map = useRef(null), ly = useRef({}), L = useRef(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    import('../map.js').then(({ default: Leaflet }) => {
+      if (!alive || map.current) return;
+      L.current = Leaflet;
+      map.current = Leaflet.map(box.current, { zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, attributionControl: true }).setView([p.loc.lat, p.loc.lng], 16);
+      map.current.attributionControl.setPrefix(false);
+      Leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current);
+      setReady(true);
+    });
+    return () => { alive = false; if (map.current) { map.current.remove(); map.current = null; } };
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const Lf = L.current, m = map.current, l = ly.current, out = p.wandering;
+    const put = (k, make, upd) => { if (l[k]) upd(l[k]); else l[k] = make().addTo(m); };
+    if (p.zone && p.zone.on !== false) put('zone', () => Lf.circle([p.zone.lat, p.zone.lng], { radius: p.zone.r }), (c) => { c.setLatLng([p.zone.lat, p.zone.lng]); c.setRadius(p.zone.r); c.setStyle({ color: out ? '#D62839' : '#0B7A75', weight: 1.5, fillColor: out ? '#D62839' : '#2BB5B0', fillOpacity: 0.14, dashArray: out ? '4 4' : null }); });
+    else if (l.zone) { l.zone.remove(); delete l.zone; }
+    const trail = (p.trail || []).filter((x) => x.at > Date.now() - 6 * 3600000).map((x) => [x.lat, x.lng]);
+    if (trail.length > 1) put('trail', () => Lf.polyline(trail, { color: '#8A5300', weight: 3, opacity: 0.6, dashArray: '2 6' }), (x) => x.setLatLngs(trail));
+    if (me) put('me', () => Lf.marker([me.lat, me.lng], { icon: Lf.divIcon({ className: '', html: '<div class="md-map-me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false }), (x) => x.setLatLng([me.lat, me.lng]));
+    const html = `<div class="md-map-pin sm${out ? ' out' : ''}"><span style="background:${p.bg};color:${p.fg}">${p.ini}</span></div>`;
+    put('pin', () => Lf.marker([p.loc.lat, p.loc.lng], { icon: Lf.divIcon({ className: '', html, iconSize: [28, 34], iconAnchor: [14, 32] }), zIndexOffset: 1000, keyboard: false }), (x) => { x.setLatLng([p.loc.lat, p.loc.lng]); x.setIcon(Lf.divIcon({ className: '', html, iconSize: [28, 34], iconAnchor: [14, 32] })); });
+    // frame the person and home (and this watch when it is near)
+    const pts = [[p.loc.lat, p.loc.lng]];
+    if (p.zone) pts.push([p.zone.lat, p.zone.lng]);
+    if (me && distance(me, p.loc) < 3000) pts.push([me.lat, me.lng]);
+    m.fitBounds(pts.length > 1 ? pts : [pts[0], pts[0]], { paddingTopLeft: [22, 40], paddingBottomRight: [22, 86], maxZoom: 17, animate: false });
+  }, [ready, p.loc.lat, p.loc.lng, p.zone && JSON.stringify(p.zone), p.wandering, (p.trail || []).length, me && Math.round(me.lat * 5000), me && Math.round(me.lng * 5000)]);
+  return <div ref={box} className="md-watch-map" aria-label={'Map showing ' + p.name} style={s('position: absolute; left: 0; right: 0; top: 40px; bottom: 0; background: #E8ECEF')} />;
+}
+
+function WatchLocate({ t, p, onBack, onShare }) {
+  const [me] = useMyPosition();
+  const has = p.loc && p.loc.lat;
+  const d = me && has ? distance(me, p.loc) : null;
+  return (
+    <div style={{ ...base({ ...t, bg: t.map }), position: 'relative', overflow: 'hidden' }}>
+      {has ? <WatchMap p={p} me={me} /> : <span style={{ ...s('position: absolute; left: 16px; right: 16px; top: 100px; text-align: center; font-size: 11px'), color: t.fg }}>No location yet.</span>}
+      <div style={{ ...s('position: absolute; z-index: 1000; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; justify-content: center'), background: t.bg, boxShadow: t.bar }}>
+        <span style={s('position: absolute; left: 6px; top: 4px')}><Back t={t} onClick={onBack} /></span>
+        <Logo t={t} size="lg" />
+      </div>
+      {has && p.wandering && <span className="md-wave" style={s('position: absolute; z-index: 1000; left: 50%; top: 46px; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px; background: #D62839; color: #FFFFFF; font-size: 9px; font-weight: 800; white-space: nowrap')}>OUTSIDE SAFE ZONE · {clock(new Date(p.wander.since))}</span>}
+      {has && <div style={{ ...s('position: absolute; z-index: 1000; left: 8px; right: 56px; bottom: 8px; display: flex; flex-direction: column; gap: 4px') }}>
+        <span style={{ ...s('padding: 3px 7px; border-radius: 10px; font-size: 9px; line-height: 1.3; font-weight: 700'), background: t.bg, color: t.fg, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}>{d != null ? `${metres(d)} ${direction(me, p.loc)} · ${walkMinutes(d * 1.3)} min walk` : p.shortAddress}<br /><span style={{ fontWeight: 500, color: t.muted }}>{ago(p.loc.at)}</span></span>
+        <a href={navigateUrl(p.loc, d != null && d > 3000 ? 'driving' : 'walking')} target="_blank" rel="noopener" style={s(btn + '; height: 28px; border-radius: 10px; background: #0B7A75; color: #FFFFFF; font-size: 11px; font-weight: 800; text-decoration: none')}>GO</a>
+      </div>}
+      <button type="button" aria-label={'Share ' + p.her + ' location'} onClick={onShare} style={{ ...s('position: absolute; z-index: 1000; right: 8px; bottom: 8px; display: flex; width: 40px; height: 40px; border-radius: 20px; align-items: center; justify-content: center; border: 0; cursor: pointer; box-shadow: 0 6px 14px rgba(0,0,0,0.3)'), background: t.fab }}><Share /></button>
     </div>
   );
 }
