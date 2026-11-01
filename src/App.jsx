@@ -5,7 +5,8 @@ import { useLive } from './live.js';
 import { savePush } from './push.js';
 import { Splash, Welcome, SignIn, SignUp, About, Setup, Pair, Paired } from './screens/start.jsx';
 import { Home, Alerts, Summary, Profile, DeleteAccount } from './screens/home.jsx';
-import { Vitals, Reading, Call, Locate, Sent, Meds, Serotonin } from './screens/person.jsx';
+import { Vitals, Reading, Call, Sent, Meds, Serotonin } from './screens/person.jsx';
+import { Locate } from './screens/locate.jsx';
 import { Report } from './screens/report.jsx';
 
 function screen(route, live) {
@@ -72,7 +73,7 @@ function useAlertNotices(live, settings) {
       if (a.type === 'dose' && !settings.doses) continue;
       if (a.type === 'trend' && settings.trend === false) continue;
       const h = new Date().getHours();
-      if (settings.quiet && (h >= 22 || h < 6) && a.type !== 'sos') continue;
+      if (settings.quiet && (h >= 22 || h < 6) && a.type !== 'sos' && a.type !== 'zone') continue;
       toast(a.title + ' · ' + a.sub);
       if (navigator.vibrate) navigator.vibrate(a.type === 'sos' ? [400, 150, 400, 150, 400] : [200, 100, 200]);
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') phoneAlert(a, key);

@@ -52,3 +52,11 @@ input:focus { border-color: #0B7A75 !important; outline: none; }
 /* Watch simulator */
 @keyframes mdDot { 0%, 100% { opacity: 0.3; transform: scale(0.8) } 50% { opacity: 1; transform: scale(1.1) } }
 .md-dot { display: inline-block; width: 5px; height: 5px; border-radius: 3px; background: #2BB5B0; animation: mdDot 1.2s ease-in-out infinite; }
+
+/* Map markers (screens/locate.jsx) */
+.md-map-pin { position: relative; width: 44px; height: 44px; border-radius: 22px 22px 22px 4px; transform: rotate(-45deg); background: #0B7A75; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 14px rgba(20,32,43,0.35); }
+.md-map-pin.out { background: #D62839; animation: mdWave 1.8s ease-out infinite; }
+.md-map-pin span { transform: rotate(45deg); width: 32px; height: 32px; border-radius: 16px; font: 700 12px Poppins, sans-serif; display: flex; align-items: center; justify-content: center; }
+.md-map-me { width: 14px; height: 14px; border-radius: 9px; background: #2F6FE0; border: 3px solid #FFFFFF; box-shadow: 0 0 0 2px rgba(47,111,224,0.35), 0 2px 6px rgba(0,0,0,0.3); }
+.md-map-home { width: 26px; height: 26px; border-radius: 13px; background: #FFFFFF; color: #0B7A75; border: 2px solid #0B7A75; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.leaflet-container { font-family: Poppins, system-ui, sans-serif; }

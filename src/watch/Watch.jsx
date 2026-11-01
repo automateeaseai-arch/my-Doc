@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, demoStory, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, demoStory, startWandering, walkHome, stopWandering, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS, initials } from '../health.js';
 import CarerFace, { CarerUnlinked } from './Carer.jsx';
 
@@ -475,10 +475,21 @@ export default function WatchPage() {
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>
-          <label htmlFor="sim-place" style={s(label)}>Where the patient is</label>
+          <label htmlFor="sim-place" style={s(label)}>Home (the safe zone is around it)</label>
           <select id="sim-place" value={st.place || 0} onChange={(e) => setPlace(Number(e.target.value))} style={s('height: 44px; border: 1.5px solid #D5DBE0; border-radius: 12px; padding: 0 10px; font-size: 15px; font-family: inherit; background: #FFFFFF; color: #14202B')}>
             {PLACES.map((pl, i) => <option key={i} value={i}>{pl.short}</option>)}
           </select>
+        </div>
+
+        <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+          <span style={s(label)}>Wandering (dementia)</span>
+          <span style={s('font-size: 13px; color: #5B6672; line-height: 1.5')}>The patient walks off along real streets (about 5× walking speed). Leaving the {p && p.zone ? p.zone.r : 100} m safe zone sends caregivers an urgent alert; their map follows the walk.</span>
+          {p && p.loc && p.zone && <span style={s('font-size: 14px; font-weight: 600; ' + (p.wander && p.wander.active ? 'color: #A81C2B' : 'color: #075955'))}>{p.wander && p.wander.active ? 'Outside the safe zone' : 'Inside the safe zone'}{st.away != null ? ` · ${st.away} m from home` : ''}{p.loc.short ? ' · ' + p.loc.short : ''}</span>}
+          <div style={s('display: flex; flex-wrap: wrap; gap: 8px')}>
+            {st.wandering ? <button type="button" onClick={stopWandering} style={s(btn)}>{st.wandering === 'route' ? 'Finding streets…' : 'Stop walking'}</button>
+              : <><button type="button" disabled={!p} onClick={startWandering} style={s(btn + '; border-color: #F2B8BE; color: #A81C2B')}>Start wandering</button>
+                <button type="button" disabled={!p || !p.zone || !p.loc || (p.loc.lat === p.zone.lat && p.loc.lng === p.zone.lng)} onClick={walkHome} style={s(btn)}>Walk back home</button></>}
+          </div>
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>

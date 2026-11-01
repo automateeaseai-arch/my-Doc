@@ -7,6 +7,7 @@ import { opticalSugar } from '../sensor/onwatch.js';
 import { sendPush } from '../push.js';
 import { analyze } from '../ai/insights.js';
 import { makeHistory } from '../ai/history.js';
+import { distance, offset, walkingRoute, streetName } from '../geo.js';
 
 const KEY = 'mydoc.watch';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -141,7 +142,12 @@ function follow(fresh) {
     // Online, a replaced watch can no longer read the record at all (p is null).
     if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) || !!st.patient || st.replaced }); return; }
     set({ patient: p, lost: false });
-    if (fresh) { fresh = false; await setPlace(st.place || 0); await loadHistory(); if (!p.recent) await backfill(p); else { tick(); scheduleAnalysis(); } }
+    // a caregiver changed the safe zone: check again at once (alerts if now outside)
+    if (!fresh && p.zone && p.loc && p.loc.lat) {
+      const out = p.zone.on !== false && distance(p.zone, p.loc) > p.zone.r;
+      if (out !== !!(p.wander && p.wander.active)) moveTo(p.loc).catch(() => {});
+    }
+    if (fresh) { fresh = false; if (!p.loc || !p.zone) await setPlace(st.place || 0); await loadHistory(); if (!p.recent) await backfill(p); else { tick(); scheduleAnalysis(); } }
   }));
   stops.push(be.watchDoc(`patients/${st.pid}/doselog/${dayKey()}`, (d) => set({ today: (d && d.taken) || {} })));
 }
@@ -236,7 +242,7 @@ function startCarer() {
 
 // Simulator only: forget this watch and start setup again.
 export function resetWatch() {
-  stop(); stopPairing();
+  stop(); stopPairing(); stopWandering();
   set({ setup: null, code: null, pid: null, recovery: null, showRecovery: false, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
   if (carerStarted) location.reload(); // drop the caregiver's live data
 }
@@ -251,7 +257,8 @@ const alerted = {}; // metric -> time of last alert, so a long spike alerts once
 async function raise(a) {
   const id = await be.addDoc(path() + '/alerts', a);
   // same tag as the app uses, so an open app and the push don't show it twice
-  sendPush(st.pid, { type: a.type, title: a.title, body: a.sub, tag: st.pid + id, urgent: a.type === 'sos', url: a.type === 'sos' ? `./#/p/${st.pid}/locate` : './#/alerts' });
+  const urgent = a.type === 'sos' || (a.type === 'zone' && a.kind === 'danger');
+  sendPush(st.pid, { type: a.type, title: a.title, body: a.sub, tag: st.pid + id, urgent, url: a.type === 'sos' || a.type === 'zone' ? `./#/p/${st.pid}/locate` : './#/alerts' });
 }
 
 export async function sendReading(k, r) {
@@ -294,12 +301,77 @@ async function tick() {
   for (const k of metrics()) if (k === 'hr' || ticks % 5 === 1) await sendReading(k, normal(k));
 }
 
+// ---- location, safe zone and wandering ---------------------------------------------------
+// Simulator: the patient lives at one of PLACES; the safe zone (100 m by default) is drawn
+// around home. A real watch sends its GPS position the same way (every few minutes, every
+// 30 seconds once outside the safe zone).
 export async function setPlace(i) {
+  stopWandering();
   set({ place: i });
   if (!st.pid) return;
-  const pl = PLACES[i];
-  await be.updateDoc(path(), { loc: { ...pl, at: Date.now() } });
+  const pl = PLACES[i], at = Date.now();
+  const zone = { lat: pl.lat, lng: pl.lng, r: (st.patient && st.patient.zone && st.patient.zone.r) || 100, on: true, label: 'Home', at };
+  const patch = { loc: { ...pl, at }, zone, trail: [{ lat: pl.lat, lng: pl.lng, at }], wander: { active: false } };
+  if (st.patient) st.patient = { ...st.patient, ...patch };
+  await be.updateDoc(path(), patch);
 }
+
+const TRAIL_MS = 6 * 3600000;
+export async function moveTo(pt, place) {
+  const p = st.patient;
+  if (!p) return;
+  const at = Date.now(), prev = p.loc || {};
+  const loc = { lat: pt.lat, lng: pt.lng, address: (place && place.address) || prev.address || '', short: (place && place.short) || prev.short || '', at };
+  const trail = [...(p.trail || []).filter((t) => t.at > at - TRAIL_MS), { lat: pt.lat, lng: pt.lng, at }].slice(-300);
+  const patch = { loc, trail, watchInfo: { battery: st.battery, lastSeen: at } };
+  let zone = p.zone;
+  if (!zone) { zone = { lat: pt.lat, lng: pt.lng, r: 100, on: true, label: 'Home', at }; patch.zone = zone; }
+  const away = Math.round(distance(zone, pt)), out = zone.on !== false && away > zone.r, was = !!(p.wander && p.wander.active);
+  if (out && !was) patch.wander = { active: true, since: at };
+  if (!out && was) patch.wander = { active: false, since: p.wander.since, back: at };
+  st.patient = { ...p, ...patch };
+  set({ away });
+  await be.updateDoc(path(), patch);
+  if (out && !was) await raise({ kind: 'danger', type: 'zone', at, read: false, title: `${p.name} left the safe zone`, sub: `${p.name} · ${away} m from ${(zone.label || 'home').toLowerCase()}${loc.short ? ' · ' + loc.short : ''}` });
+  if (!out && was) await raise({ kind: 'warn', type: 'zone', at, read: false, title: `${p.name} is back in the safe zone`, sub: `${p.name} · back near ${(zone.label || 'home').toLowerCase()}` });
+}
+
+// points every `step` metres along a path
+function densify(pts, step) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], d = distance(a, b), n = Math.max(1, Math.round(d / step));
+    for (let j = 1; j <= n; j++) out.push({ lat: a.lat + ((b.lat - a.lat) * j) / n, lng: a.lng + ((b.lng - a.lng) * j) / n });
+  }
+  return out;
+}
+let walking = null;
+async function walkTo(to) {
+  stopWandering();
+  const p = st.patient;
+  if (!p || !p.loc) return;
+  const from = { lat: p.loc.lat, lng: p.loc.lng };
+  set({ wandering: 'route' });
+  const route = await walkingRoute(from, to);
+  const steps = densify(route ? route.points : [from, to], 18).slice(1);
+  set({ wandering: true, routed: !!route });
+  let i = 0;
+  walking = setInterval(async () => {
+    if (i >= steps.length) { stopWandering(); return; }
+    const pt = steps[i++];
+    // the street name every few steps (the free service asks for at most one request a second)
+    const place = i % 6 === 1 || i === steps.length ? await streetName(pt) : null;
+    await moveTo(pt, place).catch(() => {});
+  }, 2500);
+}
+// Simulator: the patient walks off along real streets (about 5× walking speed, for the demo).
+export function startWandering() {
+  const p = st.patient;
+  if (!p || !p.loc) return;
+  return walkTo(offset(p.loc, 450 + Math.random() * 250, Math.random() * 360));
+}
+export function walkHome() { const z = st.patient && st.patient.zone; return z && walkTo({ lat: z.lat, lng: z.lng }); }
+export function stopWandering() { if (walking) clearInterval(walking); walking = null; if (st.wandering) set({ wandering: false }); }
 export async function setBattery(b) {
   set({ battery: b });
   if (st.pid) await be.updateDoc(path(), { watchInfo: { battery: b, lastSeen: Date.now() } });

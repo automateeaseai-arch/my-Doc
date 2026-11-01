@@ -102,7 +102,7 @@ export default {
       if (m.type === 'reading' && s.range === false) return false;
       if (m.type === 'dose' && s.doses === false) return false;
       if (m.type === 'trend' && s.trend === false) return false;
-      if (s.quiet && m.type !== 'sos') { const h = new Date(Date.now() - (s.tz || 0) * 60000).getUTCHours(); if (h >= 22 || h < 6) return false; }
+      if (s.quiet && m.type !== 'sos' && m.type !== 'zone') { const h = new Date(Date.now() - (s.tz || 0) * 60000).getUTCHours(); if (h >= 22 || h < 6) return false; }
       return true;
     };
     const message = { title: String(m.title || 'myDoc').slice(0, 120), body: String(m.body || '').slice(0, 300), tag: String(m.tag || '').slice(0, 80), url: String(m.url || './').slice(0, 200), urgent: !!m.urgent };

@@ -80,6 +80,13 @@ export function Home() {
             <I.chev />
           </A>
         )}
+        {live.people.filter((q) => q.wandering && !q.sosActive).map((q) => (
+          <A key={'w' + q.id} to={'/p/' + q.id + '/locate'} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none">
+            <span style={s('width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #FFFFFF; color: #D62839; display: flex; align-items: center; justify-content: center')}><I.pin size={20} /></span>
+            <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 700')}>{q.name} left the safe zone</span><span style={s('font-size: 12px')}>{q.shortAddress} · {ago(q.wander.since)}. Tap to find {q.him}.</span></span>
+            <I.chev />
+          </A>
+        ))}
         {live.profile && !live.profile.aboutDone && (
           <A to="/about" style="display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; text-decoration: none; font-size: 13px; font-weight: 600">Add your phone number and details<span style={s('flex-grow: 1')} /><I.chev color="#8A5300" /></A>
         )}
@@ -128,7 +135,7 @@ export function Home() {
   );
 }
 
-const alertTo = (pid, a) => (a.type === 'sos' ? `/p/${pid}/locate` : a.type === 'dose' ? `/p/${pid}/meds` : a.k ? `/p/${pid}/r/${a.k}` : `/p/${pid}/vitals`);
+const alertTo = (pid, a) => (a.type === 'sos' || a.type === 'zone' ? `/p/${pid}/locate` : a.type === 'dose' ? `/p/${pid}/meds` : a.k ? `/p/${pid}/r/${a.k}` : `/p/${pid}/vitals`);
 const alertTime = (at) => { const d = new Date(at); return dayKey(d) === dayKey() ? String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : d.toLocaleDateString('en-GB', { weekday: 'short' }); };
 
 export function Alerts() {
@@ -159,7 +166,7 @@ export function Alerts() {
             const u = !a.read, k = K[a.kind] || K.warn;
             return (
               <A key={a.pid + a.id} to={alertTo(a.pid, a)} style={'display: flex; align-items: center; gap: 12px; padding: 12px 8px; border-radius: 14px; text-decoration: none; color: #14202B; ' + (u ? 'background: #FDF6F6' : '') + (i < list.length - 1 ? '; border-bottom: 1px solid #E4E8EC' : '')}>
-                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; font-size: ' + (a.type === 'sos' ? '11px' : '18px') + '; font-weight: 800; display: flex; align-items: center; justify-content: center'), background: k[0], color: k[1] }}>{a.type === 'sos' ? 'SOS' : a.type === 'trend' ? <Spark size={18} /> : '!'}</span>
+                <span className={u ? 'md-wave' : ''} style={{ ...s('width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; font-size: ' + (a.type === 'sos' ? '11px' : '18px') + '; font-weight: 800; display: flex; align-items: center; justify-content: center'), background: k[0], color: k[1] }}>{a.type === 'sos' ? 'SOS' : a.type === 'trend' ? <Spark size={18} /> : a.type === 'zone' ? <I.pin size={18} /> : '!'}</span>
                 <span style={s('display: flex; flex-direction: column; flex-grow: 1; gap: 1px')}><span style={s('font-size: 14px; font-weight: 600')}>{a.title}</span><span style={s('font-size: 12px; color: #5B6672')}>{a.sub}</span></span>
                 <span style={s('display: flex; flex-direction: column; align-items: flex-end; gap: 6px')}><span style={s('font-size: 11px; color: #5B6672; white-space: nowrap')}>{alertTime(a.at)}</span><span style={{ ...s('width: 10px; height: 10px; border-radius: 5px'), background: u ? '#D62839' : 'transparent' }} /></span>
               </A>

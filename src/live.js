@@ -94,7 +94,8 @@ function person(p, i) {
     note: missed.length ? `${missed.length} missed dose${missed.length > 1 ? 's' : ''} this week: ${missed[0]}` : (p.doses || []).length ? 'No missed doses this week' : 'Add medicine to start reminders',
     today: doseStatus(p.doses, logs[dayKey()] || {}),
     alerts, unread: alerts.filter((a) => !a.read).length,
-    sosActive: p.sos && p.sos.active
+    sosActive: p.sos && p.sos.active,
+    wandering: !!(p.wander && p.wander.active && p.zone && p.zone.on !== false)
   };
 }
 

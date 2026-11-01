@@ -50,6 +50,12 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Find the person: real map, safe zone, wandering (`src/screens/locate.jsx`, `src/geo.js`)
+For people with dementia who wander. Free services only: OpenStreetMap tiles (Leaflet, loaded with the map), walking routes from the OSM routing servers (OSRM), street names from Nominatim.
+- **Map:** the person's live pin (red when outside the safe zone), the safe zone circle around home, the path walked in the last 6 hours, your own position (phone GPS) and a walking route to them; distance, direction and minutes on foot. **Navigate** opens Google Maps turn-by-turn (walking; driving when over 3 km).
+- **Safe zone:** 100 m around home by default (50/100/200/500 m or off; home = their location or yours), stored on the record as `zone`. Leaving it raises an urgent `zone` alert (push, rings in quiet hours like SOS) and a banner on Home and their screen; coming back raises a calmer one. The watch records `wander` and the `trail`.
+- **Simulator:** Home picker (the zone is drawn around it), **Start wandering** (walks off along real streets at about 5× walking speed), **Walk back home**, **Stop walking**.
+
 ## Doctor report (`src/report.js`, `src/reportPdf.js`, `src/screens/report.jsx`)
 Caregivers: the person's screen → **Doctor report** (7, 14 or 30 days; 14 by default). A preview with a graph per vital, then **Share PDF** (phone share sheet: WhatsApp, email…) or **Save PDF**. Made on the phone with jsPDF (loaded only when needed); nothing is uploaded.
 The A4 PDF: header and period, "At a glance" (averages, % in range, medicine adherence, alerts, AI early warnings), a vector graph per vital (every reading as a dot, red when out of range, open when an optical estimate; daily average line; shaded normal range; blood pressure shows both numbers), time-of-day pattern, medicine schedule and missed doses, alerts with times, and notes for the doctor.

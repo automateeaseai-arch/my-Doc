@@ -47,6 +47,13 @@ export function Vitals({ p }) {
             <I.chev />
           </A>
         )}
+        {p.wandering && (
+          <A to={'/p/' + p.id + '/locate'} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none">
+            <span style={s('width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #FFFFFF; color: #D62839; display: flex; align-items: center; justify-content: center')}><I.pin size={20} /></span>
+            <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 700')}>Outside the safe zone</span><span style={s('font-size: 12px')}>Since {clock(new Date(p.wander.since))} · {p.shortAddress}. Tap to find {p.him}.</span></span>
+            <I.chev />
+          </A>
+        )}
         {first && (
           <A to={'/p/' + p.id + '/r/' + first} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none; box-shadow: 0 10px 24px rgba(214,40,57,0.28)">
             <span className="md-wave-light" style={s('width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #FFFFFF; color: #D62839; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800')}>!</span>
@@ -213,61 +220,6 @@ export function Call({ p }) {
         <A to={'/setup?edit=' + p.id} style="display: flex; height: 44px; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; text-decoration: none; color: #0B7A75">Edit contacts</A>
       </div>
     </div>
-  );
-}
-
-export function Locate({ p }) {
-  const contact = p.contacts[0];
-  const hasLoc = !!(p.loc && p.loc.lat);
-  const shareText = `${p.name} is at ${p.address}${hasLoc ? ` (map: https://maps.google.com/?q=${p.loc.lat},${p.loc.lng})` : ''}. Sent from myDoc.`;
-  const share = async () => {
-    try { await navigator.share({ title: 'Location of ' + p.name, text: shareText }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
-    try { await navigator.clipboard.writeText(shareText); toast('Location copied'); } catch { toast(shareText); }
-  };
-  const label = 'font-size: 11px; font-weight: 600; color: #7A6E5A';
-  const street = p.address.split(',')[0].replace(/^\d+\s*/, '');
-  const area = (p.address.split(',')[1] || '').trim();
-  return (
-    <main style={s('min-height: 100dvh; box-sizing: border-box; background: #EFEBE3; position: relative; overflow: hidden')}>
-      <div aria-hidden="true" style={s('position: absolute; inset: 0; left: 50%; width: 390px; margin-left: -195px')}>
-        <div style={s('position: absolute; left: 30px; top: 150px; width: 130px; height: 110px; border-radius: 18px; background: #D7E8CF')} />
-        <div style={s('position: absolute; left: 250px; top: 90px; width: 110px; height: 150px; border-radius: 18px; background: #D7E8CF')} />
-        <div style={s('position: absolute; left: -400px; right: -400px; top: 300px; height: 14px; background: #FFFFFF; transform: rotate(-8deg)')} />
-        <div style={s('position: absolute; left: 196px; top: -20px; height: 340px; width: 18px; background: #F6D58B; transform: rotate(6deg)')} />
-        <div style={s('position: absolute; left: -400px; right: -400px; top: 420px; height: 10px; background: #FFFFFF')} />
-        <div style={s('position: absolute; left: 90px; top: 0; height: 2000px; width: 10px; background: #FFFFFF')} />
-        <div style={s('position: absolute; left: 300px; top: 260px; height: 2000px; width: 10px; background: #FFFFFF')} />
-        {hasLoc && <div style={s(label + '; position: absolute; left: 40px; top: 272px; transform: rotate(-8deg)')}>{street}</div>}
-        {hasLoc && <div style={s('position: absolute; left: 260px; top: 180px; font-size: 13px; font-weight: 700; color: #5E7A55')}>{area}</div>}
-        {hasLoc && (
-          <div style={s('position: absolute; left: 175px; top: 290px; width: 40px; display: flex; flex-direction: column; align-items: center')}>
-            <div className="md-ring" style={s('position: absolute; top: 18px; width: 120px; height: 120px; margin-top: -42px; border-radius: 60px; background: rgba(214,40,57,0.14)')} />
-            <div className="md-pin" style={s('position: relative; width: 56px; height: 56px; border-radius: 28px 28px 28px 4px; transform: rotate(-45deg); background: #D62839; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(214,40,57,0.4)')}><span style={{ ...s('transform: rotate(45deg); width: 40px; height: 40px; border-radius: 20px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center'), background: p.bg, color: p.fg }}>{p.ini}</span></div>
-            <span style={s('position: relative; margin-top: 14px; white-space: nowrap; background: #14202B; color: #FFFFFF; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600')}>{ago(p.loc.at)}</span>
-          </div>
-        )}
-      </div>
-      <div style={s('position: absolute; left: 0; right: 0; top: 0; padding: 12px 16px; display: flex; align-items: center; gap: 8px')}>
-        <A to={'/p/' + p.id + '/vitals'} aria-label="Back" style="display: flex; width: 44px; height: 44px; flex-shrink: 0; align-items: center; justify-content: center; color: #0B7A75; background: #FFFFFF; border-radius: 14px; box-shadow: 0 4px 14px rgba(20,32,43,0.12)"><I.back /></A>
-        <div style={s('flex-grow: 1; height: 44px; background: #FFFFFF; border-radius: 14px; box-shadow: 0 4px 14px rgba(20,32,43,0.12); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600')}>Where is {p.self ? 'my watch' : p.name}?</div>
-      </div>
-      <div style={s('position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: stretch')}>
-        {hasLoc && <button type="button" onClick={share} aria-label="Share location" style={s('align-self: flex-end; margin: 0 20px 16px; width: 56px; height: 56px; border-radius: 28px; border: 0; background: #14202B; color: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(20,32,43,0.3)')}><I.share /></button>}
-        <div className="md-sheet" style={s('background: #FFFFFF; border-radius: 28px 28px 0 0; padding: 12px 24px max(28px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 -10px 40px rgba(20,32,43,0.12)')}>
-          <div style={s('align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #D5DBE0')} />
-          <div style={s('display: flex; gap: 12px; align-items: center')}>
-            <span style={s('width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: #FDECEE; color: #D62839; display: flex; align-items: center; justify-content: center')}><I.pin size={22} /></span>
-            <span style={s('display: flex; flex-direction: column')}><span style={s('font-size: 16px; font-weight: 600')}>{p.address}</span><span style={s('font-size: 12px; color: #5B6672')}>{hasLoc ? `From ${p.her} watch's GPS · ${ago(p.loc.at)}` : `Appears once ${p.her} watch is linked`}</span></span>
-          </div>
-          <A to={'/p/' + p.id + '/sent'} style="display: flex; height: 56px; align-items: center; justify-content: center; gap: 8px; background: #D62839; color: #FFFFFF; border-radius: 16px; font-size: 16px; font-weight: 600; text-decoration: none; box-shadow: 0 8px 20px rgba(214,40,57,0.3)">Get emergency help</A>
-          {hasLoc && <div style={s('display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px')}>
-            {contact ? <a href={'sms:' + contact.phone.replace(/[^\d+]/g, '') + '?body=' + encodeURIComponent(shareText)} style={s('display: flex; height: 48px; align-items: center; justify-content: center; border: 1.5px solid #0B7A75; color: #0B7A75; border-radius: 14px; font-size: 14px; font-weight: 600; text-decoration: none')}>Text {contact.name}</a>
-              : <button type="button" onClick={share} style={s('display: flex; height: 48px; align-items: center; justify-content: center; border: 1.5px solid #0B7A75; color: #0B7A75; background: #FFFFFF; border-radius: 14px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer')}>Share location</button>}
-            <a href={'https://www.google.com/maps/dir/?api=1&destination=' + p.loc.lat + ',' + p.loc.lng} target="_blank" rel="noopener" style={s('display: flex; height: 48px; align-items: center; justify-content: center; border: 1.5px solid #0B7A75; color: #0B7A75; border-radius: 14px; font-size: 14px; font-weight: 600; text-decoration: none')}>Directions</a>
-          </div>}
-        </div>
-      </div>
-    </main>
   );
 }
 
