@@ -1,0 +1,16 @@
+# One-off check that the free map services answer web pages (CORS) from GitHub's network.
+name: Map services check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/map-check.yml']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          H='Origin: https://automateeaseai-arch.github.io'
+          echo "--- tile"; curl -s -o /dev/null -w "%{http_code} %{content_type}\n" -A "Mozilla/5.0" -H "Referer: https://automateeaseai-arch.github.io/my-Doc/" https://tile.openstreetmap.org/16/32878/31549.png
+          echo "--- foot route"; curl -s -D - -H "$H" "https://routing.openstreetmap.de/routed-foot/route/v1/driving/3.3515,6.6018;3.3550,6.6050?overview=full&geometries=geojson" | grep -iE "^HTTP|access-control-allow-origin|\"distance\"" | cut -c1-160
+          echo "--- osrm"; curl -s -D - -H "$H" "https://router.project-osrm.org/route/v1/foot/3.3515,6.6018;3.3550,6.6050?overview=false" | grep -iE "^HTTP|access-control-allow-origin" 
+          echo "--- nominatim"; curl -s -D - -H "$H" -A "Mozilla/5.0" "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=6.6018&lon=3.3515&zoom=18&addressdetails=1" | grep -iE "^HTTP|access-control-allow-origin|display_name" | cut -c1-200
