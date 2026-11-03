@@ -95,9 +95,14 @@ function person(p, i) {
     today: doseStatus(p.doses, logs[dayKey()] || {}),
     alerts, unread: alerts.filter((a) => !a.read).length,
     sosActive: p.sos && p.sos.active,
-    wandering: !!(p.wander && p.wander.active && p.zone && p.zone.on !== false)
+    wandering: !!(p.wander && p.wander.active && p.zone && p.zone.on !== false),
+    // newest reading time; readings older than 12 hours don't count as today's warnings
+    lastReading: Math.max(0, ...Object.values(vitals).map((v) => v.at || 0)),
+    stale: Object.keys(vitals).length > 0 && Date.now() - Math.max(...Object.values(vitals).map((v) => v.at || 0)) > STALE
   };
 }
+
+export const STALE = 12 * 3600000;
 
 export const getLive = () => {
   if (!derived) derived = { ...state, people: state.raw.map(person) };

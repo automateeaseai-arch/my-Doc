@@ -26,7 +26,7 @@ export function Vitals({ p }) {
   const st = useStore();
   const unit = st.settings.unit;
   const keys = ORDER.filter((k) => p.vitals[k]);
-  const bad = keys.filter((k) => statusOf(k, p.vitals[k].now) !== 'Normal' && !isHandled(st, p, k));
+  const bad = p.stale ? [] : keys.filter((k) => statusOf(k, p.vitals[k].now) !== 'Normal' && !isHandled(st, p, k));
   const first = bad[0];
   return (
     <div style={s('min-height: 100dvh; background: #F5F7F8; display: flex; flex-direction: column')}>
@@ -53,6 +53,9 @@ export function Vitals({ p }) {
             <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 700')}>Outside the safe zone</span><span style={s('font-size: 12px')}>Since {clock(new Date(p.wander.since))} · {p.shortAddress}. Tap to find {p.him}.</span></span>
             <I.chev />
           </A>
+        )}
+        {p.stale && (
+          <div style={s('display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 16px; background: #FFF1DB; color: #8A5300; font-size: 13px; font-weight: 600; line-height: 1.45')}>No new readings for {ago(p.lastReading).replace(' ago', '')}. Check that {p.self ? 'your' : p.her} watch is on and charged.</div>
         )}
         {first && (
           <div style={s('position: relative')}>

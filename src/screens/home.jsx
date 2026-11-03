@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { s, A, Logo, Avatar, Toggle, Seg, Nav, I, btn, section, go, toast, useTwoTap } from '../ui.jsx';
 import { update, useStore, greeting, longDate, isHandled } from '../store.js';
-import { useLive, markAlertsRead, deleteMyAccount, METRICS, statusOf } from '../live.js';
+import { useLive, markAlertsRead, deleteMyAccount, endSOS, METRICS, statusOf } from '../live.js';
 import * as be from '../backend/index.js';
 import { sugarText, dayKey, ago } from '../health.js';
 import { Spark, LEVEL, insightLine } from './ai.jsx';
@@ -10,12 +10,12 @@ import { pushSupported, needsHomeScreen, enablePush, disablePush, pushIsOn } fro
 const pillStyle = (warn) => 'display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; ' + (warn ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955');
 
 export const personHome = (p) => '/p/' + p.id + '/vitals';
-export const outOfRange = (p, st) => Object.entries(p.vitals).filter(([k, v]) => statusOf(k, v.now) !== 'Normal' && !(st && isHandled(st, p, k))).map(([k]) => k);
+export const outOfRange = (p, st) => (p.stale ? [] : Object.entries(p.vitals).filter(([k, v]) => statusOf(k, v.now) !== 'Normal' && !(st && isHandled(st, p, k))).map(([k]) => k));
 
 const miniOf = (p, unit) => p.mini.map((k) => {
   const v = p.vitals[k];
   const shown = k === 'sugar' ? sugarText(v.now, unit) : k === 'o2' ? v.show + '%' : v.show;
-  return [METRICS[k].short, shown, statusOf(k, v.now) !== 'Normal'];
+  return [METRICS[k].short, shown, !p.stale && statusOf(k, v.now) !== 'Normal'];
 });
 
 export const nextDose = (p) => {
@@ -74,11 +74,14 @@ export function Home() {
           <A to={'/setup?edit=' + p.id} aria-label={'Edit ' + p.name} style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: flex-end; color: #0B7A75"><I.edit /></A>
         </div>
         {sos && (
-          <A to={'/p/' + sos.id + '/locate'} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none">
+          <div style={s('position: relative')}>
+          <button type="button" onClick={async () => { await endSOS(sos); toast('SOS marked as handled'); }} aria-label="Mark SOS as handled" style={s('position: absolute; z-index: 1; right: 8px; top: 8px; height: 28px; padding: 0 10px; border: 0; border-radius: 14px; background: rgba(255,255,255,0.22); color: #FFFFFF; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer')}>Handled ✓</button>
+          <A to={'/p/' + sos.id + '/locate'} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; padding-top: 30px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none">
             <span style={s('width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #FFFFFF; color: #D62839; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800')}>SOS</span>
             <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 700')}>{sos.name} pressed SOS</span><span style={s('font-size: 12px')}>{sos.shortAddress} · {ago(sos.sos && sos.sos.at)}. Tap to see where.</span></span>
             <I.chev />
           </A>
+          </div>
         )}
         {live.people.filter((q) => q.wandering && !q.sosActive).map((q) => (
           <A key={'w' + q.id} to={'/p/' + q.id + '/locate'} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none">
@@ -104,6 +107,7 @@ export function Home() {
             <div style={s('font-size: 13px; color: #5B6672; text-align: center')}>{p.conds.join(' · ') || 'No conditions added'}</div>
             {!p.watch ? <div style={s('padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #F5F7F8; color: #5B6672')}>No watch paired yet</div>
               : !mini.length ? <div style={s('padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #F5F7F8; color: #5B6672')}>Waiting for the first reading</div>
+              : p.stale ? <div style={s('padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #F5F7F8; color: #5B6672')}>No new readings for {ago(p.lastReading).replace(' ago', '')} · check the watch</div>
               : <div className={warn ? 'md-wave' : ''} style={s(pillStyle(warn))}>{warn ? `${warn} reading${warn > 1 ? 's' : ''} need${warn > 1 ? '' : 's'} attention` : 'All readings normal'}</div>}
             {mini.length > 0 && (
               <div style={s('display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; margin-top: 4px')}>
