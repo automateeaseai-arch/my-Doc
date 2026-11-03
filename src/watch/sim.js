@@ -434,6 +434,7 @@ async function writeHistory(readings) {
 // Two weeks of history so charts and early warning work on day one.
 async function backfill() {
   await writeHistory(makeHistory(metrics()));
+  await sendNormal(); // a reading from right now, too
   await runAnalysis();
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { s, A, Logo, Avatar, Toggle, Seg, Nav, I, btn, section, go, toast, useTwoTap } from '../ui.jsx';
-import { update, useStore, greeting, longDate } from '../store.js';
+import { update, useStore, greeting, longDate, isHandled } from '../store.js';
 import { useLive, markAlertsRead, deleteMyAccount, METRICS, statusOf } from '../live.js';
 import * as be from '../backend/index.js';
 import { sugarText, dayKey, ago } from '../health.js';
@@ -10,7 +10,7 @@ import { pushSupported, needsHomeScreen, enablePush, disablePush, pushIsOn } fro
 const pillStyle = (warn) => 'display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; ' + (warn ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955');
 
 export const personHome = (p) => '/p/' + p.id + '/vitals';
-export const outOfRange = (p) => Object.entries(p.vitals).filter(([k, v]) => statusOf(k, v.now) !== 'Normal').map(([k]) => k);
+export const outOfRange = (p, st) => Object.entries(p.vitals).filter(([k, v]) => statusOf(k, v.now) !== 'Normal' && !(st && isHandled(st, p, k))).map(([k]) => k);
 
 const miniOf = (p, unit) => p.mini.map((k) => {
   const v = p.vitals[k];
@@ -56,7 +56,7 @@ export function Home() {
   const i = Math.min(st.sel, n - 1);
   const p = live.people[i];
   const unread = live.people.reduce((a, q) => a + q.unread, 0);
-  const warn = outOfRange(p).length;
+  const warn = outOfRange(p, st).length;
   const nd = nextDose(p);
   const pick = (k) => update(() => ({ sel: (k + n) % n }));
   const mini = miniOf(p, st.settings.unit);

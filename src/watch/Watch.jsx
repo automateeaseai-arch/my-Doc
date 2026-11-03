@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, Toggle } from '../ui.jsx';
 import { online } from '../backend/index.js';
 import { METRICS, statusOf, showValue, doseStatus, clock, ago } from '../health.js';
-import { getSim, onSim, setOption, sendNormal, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, demoStory, startWandering, walkHome, stopWandering, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
+import { getSim, onSim, setOption, sendNormal, sendReading, runScenario, setPlace, setBattery, takeDose, sendSOS, clearPing, onDoseDue, finishSetup, finishCarerSetup, startReplace, resetWatch, makeRecovery, recoverWithCode, deleteMyData, showCode, cleanCode, demoStory, startWandering, walkHome, stopWandering, startPairing, stopPairing, answerRequest, removeCarer, PROFILES, PLACES, SCENARIOS } from './sim.js';
 import { CONDITIONS, initials } from '../health.js';
 import CarerFace, { CarerUnlinked } from './Carer.jsx';
 
@@ -408,6 +408,31 @@ function Face({ st, t }) {
 
 // ---- the page: watch on top, test controls below -----------------------------------
 
+// Simulator: send exact readings (for testing any value, e.g. sugar 250 or back to 110).
+function ExactValues({ p, run, busy, btn, label }) {
+  const [v, setV] = useState({ sugar: '110', sys: '120', dia: '78', hr: '72', o2: '97' });
+  const field = 'width: 64px; height: 40px; border: 1.5px solid #D5DBE0; border-radius: 10px; padding: 0 8px; font-size: 15px; font-family: inherit; box-sizing: border-box';
+  const num = (x) => Number(String(x).replace(/[^\d.]/g, ''));
+  const rows = [
+    ['sugar', 'Blood sugar (mg/dL)', ['sugar'], () => ({ v: num(v.sugar) })],
+    ['bp', 'Blood pressure', ['sys', 'dia'], () => ({ v: num(v.sys), v2: num(v.dia) })],
+    ['hr', 'Heart rate (bpm)', ['hr'], () => ({ v: num(v.hr) })],
+    ['o2', 'Oxygen (%)', ['o2'], () => ({ v: num(v.o2) })]
+  ];
+  return (
+    <div style={s('display: flex; flex-direction: column; gap: 8px')}>
+      <span style={s(label)}>Send an exact reading</span>
+      {rows.map(([k, name, keys, make]) => (
+        <div key={k} style={s('display: flex; align-items: center; gap: 8px')}>
+          <span style={s('flex-grow: 1; font-size: 14px')}>{name}</span>
+          {keys.map((f, i) => <span key={f} style={s('display: flex; align-items: center; gap: 4px')}>{i > 0 && '/'}<input aria-label={name + (keys.length > 1 ? (i ? ' lower number' : ' top number') : '')} inputMode="numeric" value={v[f]} onChange={(e) => setV({ ...v, [f]: e.target.value })} style={s(field)} /></span>)}
+          <button type="button" disabled={!p || !keys.every((f) => num(v[f]) > 0)} onClick={() => run('x' + k, () => sendReading(k, make()))} style={s(btn + '; height: 40px')}>{busy === 'x' + k ? 'Sent ✓' : 'Send'}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function WatchPage() {
   const st = useSim();
   const t = THEMES[st.theme || 'light'];
@@ -461,6 +486,8 @@ export default function WatchPage() {
             <button type="button" disabled={!p} onClick={() => run('normal', sendNormal)} style={s(btn + '; border-color: #0B7A75; color: #0B7A75')}>{busy === 'normal' ? 'Sent ✓' : 'All normal'}</button>
             {Object.entries(SCENARIOS).map(([id, sc]) => <button key={id} type="button" disabled={!p} onClick={() => run(id, () => runScenario(id))} style={s(btn + '; border-color: #F2B8BE; color: #A81C2B')}>{busy === id ? 'Sent ✓' : sc.label}</button>)}
           </div>
+
+        <ExactValues p={p} run={run} busy={busy} btn={btn} label={label} />
         </div>
 
         <div style={s('display: flex; flex-direction: column; gap: 8px')}>

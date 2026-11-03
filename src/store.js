@@ -7,7 +7,8 @@ const fresh = () => ({
   sel: 0,
   settings: { range: true, doses: true, trend: true, summary: true, quiet: false, unit: 'mg', theme: 'light', shareVitals: true },
   serotoninWarn: true,
-  summarySeen: ''
+  summarySeen: '',
+  handled: {} // 'pid:metric' -> time of the reading a caregiver marked as handled
 });
 
 const load = () => {
@@ -32,6 +33,11 @@ export const useStore = () => {
   useEffect(() => { subs.add(set); return () => subs.delete(set); }, []);
   return s;
 };
+
+// A high or low reading the caregiver has dealt with stops showing its warning box
+// (until a newer out-of-range reading arrives).
+export const isHandled = (st, p, k) => (st.handled || {})[p.id + ':' + k] >= ((p.vitals[k] && p.vitals[k].at) || Infinity);
+export const markHandled = (p, k) => update((x) => ({ handled: { ...(x.handled || {}), [p.id + ':' + k]: p.vitals[k].at } }));
 
 export const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 export const todayLabel = () => new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { s, A, Logo, Back, Avatar, Toggle, Seg, Nav, I, btn, section, card, toast } from '../ui.jsx';
-import { update, useStore, todayLabel } from '../store.js';
+import { update, useStore, todayLabel, isHandled, markHandled } from '../store.js';
 import { useLive, markTaken, addDose, removeDose, sendToWatch, endSOS, METRICS, statusOf } from '../live.js';
 import { ORDER, sugarText, sugarUnit, clock, ago } from '../health.js';
 import { Insights } from './ai.jsx';
@@ -26,7 +26,7 @@ export function Vitals({ p }) {
   const st = useStore();
   const unit = st.settings.unit;
   const keys = ORDER.filter((k) => p.vitals[k]);
-  const bad = keys.filter((k) => statusOf(k, p.vitals[k].now) !== 'Normal');
+  const bad = keys.filter((k) => statusOf(k, p.vitals[k].now) !== 'Normal' && !isHandled(st, p, k));
   const first = bad[0];
   return (
     <div style={s('min-height: 100dvh; background: #F5F7F8; display: flex; flex-direction: column')}>
@@ -55,11 +55,14 @@ export function Vitals({ p }) {
           </A>
         )}
         {first && (
-          <A to={'/p/' + p.id + '/r/' + first} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none; box-shadow: 0 10px 24px rgba(214,40,57,0.28)">
+          <div style={s('position: relative')}>
+          <button type="button" onClick={() => markHandled(p, first)} aria-label="Mark as handled" style={s('position: absolute; z-index: 1; right: 8px; top: 8px; height: 28px; padding: 0 10px; border: 0; border-radius: 14px; background: rgba(255,255,255,0.22); color: #FFFFFF; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer')}>Handled ✓</button>
+          <A to={'/p/' + p.id + '/r/' + first} className="md-wave" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; padding-top: 30px; background: #D62839; color: #FFFFFF; border-radius: 18px; text-decoration: none; box-shadow: 0 10px 24px rgba(214,40,57,0.28)">
             <span className="md-wave-light" style={s('width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; background: #FFFFFF; color: #D62839; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800')}>!</span>
             <span style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 15px; font-weight: 600')}>{(METRICS[first].label || METRICS[first].title)} is {statusOf(first, p.vitals[first].now).toLowerCase()}</span><span style={s('font-size: 12px')}>{p.self ? 'Take your medication or call for help' : `Check on ${p.him} or remind ${p.him} to take ${p.her} medication`}</span></span>
             <I.chev />
           </A>
+          </div>
         )}
         <Insights p={p} />
         {keys.length ? (
@@ -140,6 +143,9 @@ export function Reading({ p, metric }) {
           <div style={s('display: flex; flex-direction: column; flex-grow: 1')}><span style={s('font-size: 14px; font-weight: 600')}>{p.name}</span><span style={s('font-size: 12px; color: #5B6672')}>{v.rows[0][0]} · from {p.her} watch</span>{v.est && <span style={s('font-size: 12px; font-weight: 600; color: #8A5300')}>Estimated by optical sensor (experimental) · ± {v.est.pm} mg/dL</span>}</div>
           <span className={high ? 'md-wave' : ''} style={s('padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; ' + (high ? 'background: #D62839; color: #FFFFFF' : 'background: #E3F5F3; color: #075955'))}>{state}</span>
         </div>
+        {high && (isHandled(st, p, k)
+          ? <span style={s('font-size: 12px; font-weight: 600; color: #075955')}>Marked as handled. A new {state.toLowerCase()} reading will warn again.</span>
+          : <button type="button" onClick={() => { markHandled(p, k); toast('Marked as handled'); }} style={s('align-self: flex-start; height: 36px; padding: 0 14px; border: 1.5px solid #D5DBE0; border-radius: 12px; background: #FFFFFF; color: #14202B; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer')}>Mark as handled</button>)}
         <div style={s('display: flex; align-items: baseline; gap: 6px')}><span style={{ ...s('font-size: 52px; font-weight: 800; line-height: 1'), color: high ? '#A81C2B' : '#14202B' }}>{big}</span><span style={s('font-size: 15px; color: #5B6672')}>{unitText}</span></div>
         <div style={s('display: flex; flex-direction: column; gap: 6px')}>
           <div style={s('position: relative; display: flex; height: 10px; gap: 3px')}>
