@@ -50,6 +50,13 @@ npm run build    # static files in dist/
 - `patients/{id}/readings`, `/doselog/{YYYY-MM-DD}`, `/alerts`
 - `codes/{6 digits}`: pairing handshake
 
+## Security (checked 15 Nov 2026)
+- **Rules** (`firestore.rules`, 68 emulator checks): a record is readable only by its watch and accepted caregivers; caregivers may change only a fixed list of fields (never readings, location or AI findings); pairing codes can only be answered by their watch, and a typed code only lets someone ask for themselves, link their own watch, or (as a caregiver) replace a watch.
+- **App:** every record is cleaned before use (`clean` in `src/live.js`; the watch does the same for caregiver-editable fields), text on map pins is escaped, a content security policy is set on each page, notification links can only open pages of this app.
+- **Push service:** sends only to real browser push services, fixed link shape, small requests only; the caller must be the person's watch (Firestore rules decide).
+- **Libraries:** Firebase 13, jsPDF 4. `npm audit` still lists @grpc/grpc-js through Firestore's Node build, which is not in the browser bundle.
+- **Known limits:** no rate limiting or App Check (anyone can create accounts and records); a pairing request shows the name the asker typed, so patients should accept only people they expect; 6-digit pairing codes live only while the watch shows them (30 minutes at most).
+
 ## Find the person: real map, safe zone, wandering (`src/screens/locate.jsx`, `src/geo.js`)
 For people with dementia who wander. Free services only: OpenStreetMap tiles (Leaflet, loaded with the map), walking routes from the OSM routing servers (OSRM), street names from Nominatim, or Photon if Nominatim does not answer (otherwise "About 150 m north of home").
 - **Map:** the person's live pin (red when outside the safe zone), the safe zone circle around home, the path walked in the last 6 hours, your own position (phone GPS) and a walking route to them; distance, direction and minutes on foot. **Navigate** opens Google Maps turn-by-turn (walking; driving when over 3 km).

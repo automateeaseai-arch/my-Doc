@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { s, A, I, toast } from '../ui.jsx';
 import { updatePerson } from '../live.js';
 import { ago, clock } from '../health.js';
-import { distance, direction, metres, walkMinutes, walkingRoute, navigateUrl } from '../geo.js';
+import { esc, distance, direction, metres, walkMinutes, walkingRoute, navigateUrl } from '../geo.js';
 
 const RADII = [50, 100, 200, 500];
 
@@ -59,7 +59,7 @@ function MapView({ p, me, route, fitKey, sheetH }) {
       put('meAcc', () => Lf.circle([me.lat, me.lng], { radius: Math.min(me.acc || 30, 150), color: '#2F6FE0', weight: 1, fillOpacity: 0.1 }), (c) => { c.setLatLng([me.lat, me.lng]); c.setRadius(Math.min(me.acc || 30, 150)); });
       put('me', () => Lf.marker([me.lat, me.lng], { icon: Lf.divIcon({ className: '', html: '<div class="md-map-me" title="You"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false }), (mk) => mk.setLatLng([me.lat, me.lng]));
     }
-    const html = `<div class="md-map-pin${out ? ' out' : ''}"><span style="background:${p.bg};color:${p.fg}">${p.ini}</span></div>`;
+    const html = `<div class="md-map-pin${out ? ' out' : ''}"><span style="background:${p.bg};color:${p.fg}">${esc(p.ini)}</span></div>`;
     put('person', () => Lf.marker([p.loc.lat, p.loc.lng], { icon: Lf.divIcon({ className: '', html, iconSize: [44, 52], iconAnchor: [22, 50] }), title: p.name, zIndexOffset: 1000 }), (mk) => { mk.setLatLng([p.loc.lat, p.loc.lng]); mk.setIcon(Lf.divIcon({ className: '', html, iconSize: [44, 52], iconAnchor: [22, 50] })); });
     // keep the person in view as they move
     m.panInside([p.loc.lat, p.loc.lng], { paddingTopLeft: [50, 90], paddingBottomRight: [70, sheetH + 30] });

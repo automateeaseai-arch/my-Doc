@@ -496,8 +496,8 @@ export default function WatchPage() {
           <div style={s('display: flex; flex-wrap: wrap; gap: 8px')}>
             {[['sugar', 'Sugar creeping up'], ['bp', 'Blood pressure creeping up'], [null, 'Normal fortnight']].map(([k, l]) => <button key={l} type="button" disabled={!p || !!busy} onClick={() => run('ai' + k, () => demoStory(k))} style={s(btn + (k ? '; border-color: #F2B33D; color: #8A5300' : ''))}>{busy === 'ai' + k ? 'Writing history…' : l}</button>)}
           </div>
-          {p && p.insights && <div style={s('display: flex; flex-direction: column; gap: 6px')}>
-            {p.insights.items.map((i) => <div key={i.id} style={s('padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.45; ' + ({ warn: 'background: #FDECEE; color: #A81C2B', watch: 'background: #FFF1DB; color: #8A5300', info: 'background: #F5F7F8; color: #5B6672', good: 'background: #E3F5F3; color: #075955' }[i.level]))}><b>{i.title}</b><br />{i.text}</div>)}
+          {p && p.insights && Array.isArray(p.insights.items) && <div style={s('display: flex; flex-direction: column; gap: 6px')}>
+            {p.insights.items.filter((i) => i && typeof i.title === 'string' && typeof i.text === 'string').map((i) => <div key={i.id} style={s('padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.45; ' + ({ warn: 'background: #FDECEE; color: #A81C2B', watch: 'background: #FFF1DB; color: #8A5300', info: 'background: #F5F7F8; color: #5B6672', good: 'background: #E3F5F3; color: #075955' }[i.level] || 'background: #F5F7F8; color: #5B6672'))}><b>{i.title}</b><br />{i.text}</div>)}
           </div>}
         </div>
 

@@ -5,7 +5,7 @@ import { s } from '../ui.jsx';
 import { useLive, markAlertsRead, sendToWatch, requestLink, readCode, METRICS, statusOf } from '../live.js';
 import { ORDER, dayKey, ago, clock } from '../health.js';
 import { useMyPosition } from '../screens/locate.jsx';
-import { distance, direction, metres, walkMinutes, navigateUrl } from '../geo.js';
+import { esc, distance, direction, metres, walkMinutes, navigateUrl } from '../geo.js';
 import { setOption, resetWatch, startCarerLink } from './sim.js';
 
 // Extra colours the caregiver screens use, per watch theme (from the design files).
@@ -407,7 +407,7 @@ function WatchMap({ p, me }) {
     const trail = (p.trail || []).filter((x) => x.at > Date.now() - 6 * 3600000).map((x) => [x.lat, x.lng]);
     if (trail.length > 1) put('trail', () => Lf.polyline(trail, { color: '#8A5300', weight: 3, opacity: 0.6, dashArray: '2 6' }), (x) => x.setLatLngs(trail));
     if (me) put('me', () => Lf.marker([me.lat, me.lng], { icon: Lf.divIcon({ className: '', html: '<div class="md-map-me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false }), (x) => x.setLatLng([me.lat, me.lng]));
-    const html = `<div class="md-map-pin sm${out ? ' out' : ''}"><span style="background:${p.bg};color:${p.fg}">${p.ini}</span></div>`;
+    const html = `<div class="md-map-pin sm${out ? ' out' : ''}"><span style="background:${p.bg};color:${p.fg}">${esc(p.ini)}</span></div>`;
     put('pin', () => Lf.marker([p.loc.lat, p.loc.lng], { icon: Lf.divIcon({ className: '', html, iconSize: [28, 34], iconAnchor: [14, 32] }), zIndexOffset: 1000, keyboard: false }), (x) => { x.setLatLng([p.loc.lat, p.loc.lng]); x.setIcon(Lf.divIcon({ className: '', html, iconSize: [28, 34], iconAnchor: [14, 32] })); });
     // frame the person and home (and this watch when it is near)
     const pts = [[p.loc.lat, p.loc.lng]];

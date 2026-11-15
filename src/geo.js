@@ -72,3 +72,6 @@ async function nominatim(p) {
 
 // Open turn-by-turn directions in the phone's maps app (Google Maps works on Android and iPhone).
 export const navigateUrl = (to, mode = 'walking') => `https://www.google.com/maps/dir/?api=1&destination=${to.lat},${to.lng}&travelmode=${mode}`;
+
+// Text from a person's record goes into map markers as HTML: escape it.
+export const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

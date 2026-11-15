@@ -26,7 +26,9 @@ self.addEventListener('push', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = new URL(e.notification.data && e.notification.data.url || './', self.registration.scope).href;
+  // only ever open pages of this app (a notification can't send anyone to another site)
+  let url = self.registration.scope;
+  try { const u = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope); if (u.href.startsWith(self.registration.scope)) url = u.href; } catch { /* keep the app's home */ }
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
     const app = cs.find((c) => !c.url.includes('watch.html') && !c.url.includes('lab.html'));
     if (app) return app.navigate(url).then((c) => (c || app).focus()).catch(() => app.focus());

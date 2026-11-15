@@ -76,6 +76,44 @@ function weekOf(p, logs) {
   return { week: due ? Math.round((taken / due) * 100) + '% on time' : 'Starts tomorrow', missed };
 }
 
+// A record is written by someone else's watch, so nothing in it is trusted: wrong types are
+// dropped here, so that a broken (or hostile) record can't crash a caregiver's app.
+const str = (v, max = 80) => (typeof v === 'string' ? v.slice(0, max) : '');
+const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+const arr = (v, max = 50) => (Array.isArray(v) ? v.slice(0, max) : []);
+const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+const point = (v) => (obj(v) && num(v.lat) != null && num(v.lng) != null && Math.abs(v.lat) <= 90 && Math.abs(v.lng) <= 180 ? v : null);
+function clean(p) {
+  const recent = {};
+  for (const k of ORDER) {
+    const rs = arr(obj(p.recent) && p.recent[k], 5).filter((r) => obj(r) && num(r.v) != null && num(r.at) != null)
+      .map((r) => ({ v: r.v, at: r.at, ...(num(r.v2) != null ? { v2: r.v2 } : {}), ...(obj(r.est) && num(r.est.pm) != null ? { est: { pm: r.est.pm, q: str(r.est.q, 10) } } : {}) }));
+    if (rs.length) recent[k] = rs;
+  }
+  const loc = point(p.loc), zone = point(p.zone), ins = obj(p.insights), wander = obj(p.wander), sos = obj(p.sos);
+  return {
+    ...p, name: str(p.name, 60) || 'Unnamed', ini: str(p.ini, 3), phone: str(p.phone, 30), pronoun: str(p.pronoun, 5), self: p.self === true,
+    color: num(p.color) != null ? Math.abs(Math.floor(p.color)) : undefined,
+    conds: arr(p.conds, 12).filter((c) => typeof c === 'string').map((c) => c.slice(0, 40)),
+    contacts: arr(p.contacts, 5).filter(obj).map((c) => ({ name: str(c.name, 60), ini: str(c.ini, 3), rel: str(c.rel, 40), phone: str(c.phone, 30) })).filter((c) => c.name && c.phone),
+    doses: arr(p.doses, 30).filter((d) => obj(d) && typeof d.id === 'string' && typeof d.name === 'string' && (d.need || /^\d\d:\d\d$/.test(d.time))).map((d) => ({ ...d, name: d.name.slice(0, 60), how: str(d.how, 60) })),
+    carers: arr(p.carers, 40).filter((c) => typeof c === 'string'), carerNames: obj(p.carerNames) || {}, carerGroups: obj(p.carerGroups) || {},
+    recent, days: obj(p.days) || {}, watchInfo: obj(p.watchInfo) || undefined, created: num(p.created) || 0,
+    loc: loc ? { lat: loc.lat, lng: loc.lng, address: str(loc.address, 120), short: str(loc.short, 80), at: num(loc.at) || 0 } : null,
+    zone: zone && num(zone.r) != null ? { ...zone, r: Math.min(5000, Math.max(20, zone.r)), label: str(zone.label, 20) } : null,
+    trail: arr(p.trail, 300).filter((t) => point(t) && num(t.at) != null),
+    wander: wander ? { active: wander.active === true, since: num(wander.since) || 0 } : null,
+    sos: sos ? { active: sos.active === true, at: num(sos.at) || 0, address: str(sos.address, 120) } : null,
+    insights: ins && Array.isArray(ins.items) ? { at: num(ins.at) || 0, items: ins.items.slice(0, 8).filter((i) => obj(i) && typeof i.id === 'string' && ['warn', 'watch', 'info', 'good'].includes(i.level)).map((i) => ({ id: i.id.slice(0, 30), k: ORDER.includes(i.k) ? i.k : undefined, level: i.level, title: str(i.title, 120), text: str(i.text, 300), why: arr(i.why, 4).filter((w) => typeof w === 'string').map((w) => w.slice(0, 160)), forecast: cleanForecast(i.forecast) })) } : null
+  };
+}
+function cleanForecast(f) {
+  if (!obj(f) || !Array.isArray(f.daily) || !Array.isArray(f.next)) return undefined;
+  const daily = f.daily.slice(0, 10).filter((d) => obj(d) && num(d.d) != null && num(d.v) != null), next = f.next.slice(0, 3).filter((v) => num(v) != null);
+  return daily.length > 1 && next.length ? { daily, next, limit: num(f.limit) } : undefined;
+}
+const safePerson = (raw, i) => { try { return person(clean(raw), i); } catch (e) { console.warn('myDoc: skipped a record that could not be read', e); return null; } };
+
 function person(p, i) {
   const [bg, fg] = AVATARS[(p.color ?? i) % AVATARS.length];
   const logs = state.logs[p.id] || {};
@@ -83,7 +121,7 @@ function person(p, i) {
   const { week, missed } = weekOf(p, logs);
   const conds = p.conds || [];
   const mini = (conds.includes('Diabetes') ? ['sugar', 'bp', 'hr', 'o2'] : ['bp', 'hr', 'o2', 'sugar']).filter((k) => vitals[k]).slice(0, 3);
-  const alerts = state.alerts[p.id] || [];
+  const alerts = (state.alerts[p.id] || []).filter((a) => a && typeof a.at === 'number').map((a) => ({ ...a, title: str(a.title, 120), sub: str(a.sub, 300), kind: a.kind === 'danger' ? 'danger' : 'warn', type: str(a.type, 10), k: ORDER.includes(a.k) ? a.k : undefined }));
   return {
     ...p, ...pron(p), bg, fg, ini: p.ini || initials(p.name), conds,
     contacts: p.contacts || [], doses: p.doses || [],
@@ -105,7 +143,7 @@ function person(p, i) {
 export const STALE = 12 * 3600000;
 
 export const getLive = () => {
-  if (!derived) derived = { ...state, people: state.raw.map(person) };
+  if (!derived) derived = { ...state, people: state.raw.map(safePerson).filter(Boolean) };
   return derived;
 };
 export const useLive = () => {

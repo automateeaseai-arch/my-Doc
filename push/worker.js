@@ -77,6 +77,13 @@ async function push(env, jwk, sub, message, urgent) {
   return r.status;
 }
 
+// Subscriptions are written by caregivers' phones; only send to real browser push services,
+// so the worker can't be used to post to arbitrary addresses.
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/, /\.push\.apple\.com$/];
+function pushHost(endpoint) {
+  try { const u = new URL(endpoint); return u.protocol === 'https:' && PUSH_HOSTS.some((h) => h.test(u.hostname)); } catch { return false; }
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -87,6 +94,7 @@ export default {
     if (url.pathname !== '/send' || req.method !== 'POST') return json(req, { error: 'not-found' }, 404);
 
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
+    if (Number(req.headers.get('Content-Length') || 0) > 4096) return json(req, { error: 'too-large' }, 413);
     let m;
     try { m = await req.json(); } catch { return json(req, { error: 'bad-request' }, 400); }
     if (!token || !/^[\w-]{1,64}$/.test(m.pid || '')) return json(req, { error: 'bad-request' }, 400);
@@ -105,10 +113,10 @@ export default {
       if (s.quiet && m.type !== 'sos' && m.type !== 'zone') { const h = new Date(Date.now() - (s.tz || 0) * 60000).getUTCHours(); if (h >= 22 || h < 6) return false; }
       return true;
     };
-    const message = { title: String(m.title || 'myDoc').slice(0, 120), body: String(m.body || '').slice(0, 300), tag: String(m.tag || '').slice(0, 80), url: String(m.url || './').slice(0, 200), urgent: !!m.urgent };
+    const message = { title: String(m.title || 'myDoc').slice(0, 120), body: String(m.body || '').slice(0, 300), tag: String(m.tag || '').slice(0, 80), url: /^\.\/(#\/[\w\/-]{0,80})?$/.test(m.url || '') ? m.url : './', urgent: !!m.urgent };
     let sent = 0;
     await Promise.all(subs.map(async (s) => {
-      if (!carers.has(s.uid) || !s.endpoint || !s.keys) { await firestore(env, token, s.path, 'DELETE').catch(() => {}); return; }
+      if (!carers.has(s.uid) || !pushHost(s.endpoint) || !s.keys || typeof s.keys.p256dh !== 'string' || typeof s.keys.auth !== 'string') { await firestore(env, token, s.path, 'DELETE').catch(() => {}); return; }
       if (!wanted(s)) return;
       const status = await push(env, jwk, s, message, m.urgent).catch(() => 0);
       if (status === 404 || status === 410) await firestore(env, token, s.path, 'DELETE').catch(() => {}); // phone unsubscribed

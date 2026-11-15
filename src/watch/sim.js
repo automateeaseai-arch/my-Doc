@@ -141,6 +141,15 @@ function follow(fresh) {
   stops.push(be.watchDoc('patients/' + st.pid, async (p) => {
     // Online, a replaced watch can no longer read the record at all (p is null).
     if (!p || p.watchUid !== st.uid) { set({ patient: null, lost: true, replaced: !!(p && p.watchUid) || !!st.patient || st.replaced }); return; }
+    // caregivers can edit some fields (medicine, contacts, zone, messages): never trust their shape
+    p = {
+      ...p, name: typeof p.name === 'string' ? p.name.slice(0, 60) : 'Me',
+      doses: (Array.isArray(p.doses) ? p.doses : []).filter((d) => d && typeof d.id === 'string' && typeof d.name === 'string' && (d.need || /^\d\d:\d\d$/.test(d.time))).slice(0, 30),
+      contacts: (Array.isArray(p.contacts) ? p.contacts : []).filter((c) => c && typeof c.name === 'string' && typeof c.phone === 'string').slice(0, 5),
+      conds: (Array.isArray(p.conds) ? p.conds : []).filter((c) => typeof c === 'string'),
+      zone: p.zone && typeof p.zone.lat === 'number' && typeof p.zone.lng === 'number' && typeof p.zone.r === 'number' ? p.zone : null,
+      ping: p.ping && typeof p.ping === 'object' ? { ...p.ping, text: String(p.ping.text || '').slice(0, 200), from: String(p.ping.from || '').slice(0, 60) } : null
+    };
     set({ patient: p, lost: false });
     // a caregiver changed the safe zone: check again at once (alerts if now outside)
     if (!fresh && p.zone && p.loc && p.loc.lat && outside(p.zone, p.loc) !== !!(p.wander && p.wander.active) && Date.now() - lastRecheck > 3000) {
@@ -298,7 +307,9 @@ let ticks = 0;
 async function tick() {
   if (!st.patient || !st.auto || document.hidden) return;
   ticks++;
-  for (const k of metrics()) if (k === 'hr' || ticks % 5 === 1) await sendReading(k, normal(k));
+  try {
+    for (const k of metrics()) if (k === 'hr' || ticks % 5 === 1) await sendReading(k, normal(k));
+  } catch { /* the record moved to another watch or was deleted mid-send: follow() shows that */ }
 }
 
 // ---- location, safe zone and wandering ---------------------------------------------------

@@ -39,9 +39,11 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid
         && request.resource.data.carers.size() == 0;
       allow read: if isCarer(resource.data) || isWatch(resource.data);
-      // Caregivers may update, but only the watch may add caregivers (consent).
+      // Caregivers may change only these fields (never readings, location or AI findings), and
+      // only the watch may add caregivers (consent).
       allow update: if isWatch(resource.data)
         || (isCarer(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'ini', 'self', 'conds', 'contacts', 'autoAlert', 'phone', 'pronoun', 'doses', 'ping', 'sos', 'zone', 'carers', 'carerNames', 'carerGroups', 'watchUid', 'replaceCode', 'watchInfo'])
             && (request.resource.data.watchUid == resource.data.watchUid || isReplacement())
             && (!('carers' in request.resource.data.diff(resource.data).affectedKeys())
                 || request.resource.data.carers.hasOnly(resource.data.carers.concat(myWatches()))))
@@ -83,11 +85,25 @@ service cloud.firestore {
         || (exists(/databases/$(database)/documents/patients/$(resource.data.pid)) && patient(resource.data.pid).watchUid == request.auth.uid));
     }
 
-    // Pairing codes: a watch creates one; whoever types it can ask (request) or link.
+    // Pairing codes. A watch creates one and answers it. Someone who types the code may only:
+    // ask to monitor the patient (naming themselves), link a caregiver watch to themselves, or,
+    // as a caregiver of the person, point a replacement watch at that person.
     match /codes/{code} {
-      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid;
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      allow create: if signedIn() && request.resource.data.watchUid == request.auth.uid
+        && request.resource.data.role in ['patient', 'carer', 'replace'];
       allow get: if signedIn();
-      allow update: if signedIn() && request.resource.data.watchUid == resource.data.watchUid;
+      allow update: if signedIn() && !changed().hasAny(['watchUid', 'role', 'createdAt']) && (
+        (resource.data.watchUid == request.auth.uid && changed().hasOnly(['status']))
+        || (resource.data.role == 'patient' && changed().hasOnly(['request'])
+            && request.auth.uid in request.resource.data.request.carers
+            && request.resource.data.request.carers.size() <= 6
+            && request.resource.data.request.carerName is string && request.resource.data.request.carerName.size() <= 40)
+        || (resource.data.role == 'carer' && changed().hasOnly(['carerUid', 'carerName', 'carers'])
+            && request.resource.data.carerUid == request.auth.uid)
+        || (resource.data.role == 'replace' && changed().hasOnly(['pid', 'personName'])
+            && request.auth.uid in patient(request.resource.data.pid).carers
+            && patient(request.resource.data.pid).watchUid == resource.data.watchUid));
       allow delete: if signedIn() && resource.data.watchUid == request.auth.uid;
     }
   }
