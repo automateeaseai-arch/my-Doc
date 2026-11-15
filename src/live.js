@@ -200,7 +200,7 @@ export async function readCode(code) {
 // onResult('accepted' | 'declined') is called with the answer.
 export async function requestLink(code, c, onResult) {
   const a = actor();
-  await be.updateDoc('codes/' + code, { request: { carerUid: a.uid, carerName: a.name, carers: [...new Set(a.carers)], at: Date.now() } });
+  await be.updateDoc('codes/' + code, { request: { carerUid: a.uid, carerName: String(a.name).slice(0, 40), carers: [...new Set(a.carers)].slice(0, 6), at: Date.now() } });
   let done = false;
   const finish = (r) => { if (done) return; done = true; stopCode(); clearInterval(poll); onResult(r); };
   const stopCode = be.watchDoc('codes/' + code, (d) => { if (d && d.status) finish(d.status); });
