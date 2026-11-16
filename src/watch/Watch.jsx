@@ -53,11 +53,12 @@ function Setup({ t }) {
   if (step === 'replace') return <ReplaceCode t={t} onBack={() => setStep('newold')} onRecover={() => setStep('recover')} />;
   if (step === 'recover') return <Recover t={t} input={input} onBack={() => { startReplace(); setStep('replace'); }} />;
   if (step === 'role') return (
-    <div style={face(t, 'padding: 8px 14px 12px; gap: 8px; align-items: stretch; text-align: left')}>
+    <div style={face(t, 'padding: 6px 14px 8px; gap: 6px; align-items: stretch; text-align: left')}>
       <div style={s('display: flex; justify-content: center')}><WLogo t={t} /></div>
       <span style={s('font-family: Marcellus, serif; font-size: 14px; text-align: center; letter-spacing: 0.3px')}>WHO WEARS THIS WATCH?</span>
       <button type="button" onClick={() => setStep('newold')} style={s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: #2BB5B0; color: #14202B; border: 0; text-align: left; font-family: inherit; cursor: pointer')}><span style={s('font-size: 14px; font-weight: 800')}>I'M THE PATIENT</span><span style={s('font-size: 10px; font-weight: 600')}>Track my health and medicine</span></button>
       <button type="button" onClick={finishCarerSetup} style={{ ...s('display: flex; flex-direction: column; justify-content: center; gap: 1px; height: 62px; padding: 0 14px; border-radius: 18px; background: transparent; text-align: left; font-family: inherit; cursor: pointer; box-sizing: border-box'), border: '1.5px solid ' + t.line, color: t.fg }}><span style={s('font-size: 14px; font-weight: 800')}>I'M A CAREGIVER</span><span style={{ fontSize: 10, color: t.muted }}>Look after other people</span></button>
+      <button type="button" disabled={busy} onClick={async () => { setBusy(true); await finishSetup({ name: 'Mama Nkechi', conds: ['Hypertension', 'Diabetes'], contacts: [{ name: 'Chinedu', ini: 'C', rel: 'Emergency contact', phone: '0809 123 4567' }] }); }} style={{ ...s('border: 0; background: transparent; padding: 2px; font-size: 10px; font-weight: 800; font-family: inherit; cursor: pointer; text-decoration: underline'), color: t.teal }}>{busy ? 'SETTING UP…' : 'QUICK DEMO: SET UP AS MAMA NKECHI'}</button>
     </div>
   );
   if (step === 'contact') return (
