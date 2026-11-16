@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F5F7F8">
+<title>myDoc demo: phone app and smartwatch</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Poppins:wght@400;600;700&display=swap">
+<style>
+  :root { --ink: #14202B; --muted: #5B6672; --teal: #0B7A75; --red: #D62839; --mist: #F5F7F8; --line: #E4E8EC; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--mist); color: var(--ink); font-family: Poppins, system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 40px; }
+  .logo { font-family: 'Kaushan Script', cursive; color: var(--red); line-height: 1; }
+  .logo span:first-child { font-size: 20px; } .logo span:last-child { font-size: 40px; }
+  h1 { font-size: 24px; margin: 8px 0 4px; line-height: 1.25; }
+  h2 { font-size: 15px; margin: 0 0 8px; letter-spacing: 0.4px; text-transform: uppercase; }
+  p { margin: 0 0 8px; font-size: 15px; color: var(--muted); max-width: 760px; }
+  .card { background: #FFFFFF; border-radius: 20px; padding: 16px 18px; box-shadow: 0 6px 20px rgba(20,32,43,0.06); }
+  ol { margin: 0; padding-left: 20px; font-size: 14px; } li { margin-bottom: 5px; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+  .links a { display: inline-flex; align-items: center; min-height: 46px; padding: 0 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-decoration: none; border: 1.5px solid var(--teal); color: var(--teal); background: #FFFFFF; }
+  .links a.main { background: var(--teal); color: #FFFFFF; }
+  a:focus-visible { outline: 3px solid #2BB5B0; outline-offset: 2px; }
+  .stage { display: none; gap: 20px; margin-top: 16px; align-items: flex-start; }
+  .device { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .device h2 { color: var(--teal); }
+  .device small { font-size: 13px; color: var(--muted); }
+  iframe { width: 100%; height: 860px; border: 1px solid var(--line); border-radius: 24px; background: #FFFFFF; }
+  .phone { flex: 0 0 420px; }
+  .narrow { margin-top: 16px; }
+  @media (min-width: 900px) { .stage { display: flex; } .narrow { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo" aria-label="myDoc"><span>my</span><span>DOC</span></div>
+  <h1>Live demo: the caregiver's phone app and the patient's smartwatch</h1>
+  <p>myDoc has two parts that talk to each other: a phone app for family caregivers and software for the patient's smartwatch. The watch is simulated here, so you can try the whole product without hardware.</p>
+
+  <div class="links">
+    <a class="main" href="./" target="_blank" rel="noopener">Open the phone app</a>
+    <a class="main" href="./watch.html" target="_blank" rel="noopener">Open the smartwatch</a>
+    <a href="./lab.html" target="_blank" rel="noopener">Sensor Lab</a>
+    <a href="./privacy.html" target="_blank" rel="noopener">Privacy</a>
+  </div>
+
+  <div class="card">
+    <h2>Try it in 3 minutes</h2>
+    <ol>
+      <li><b>Watch:</b> tap the watch, then <b>QUICK DEMO: SET UP AS MAMA NKECHI</b>, then "I've written it down".</li>
+      <li><b>Watch:</b> tap the gear icon, then <b>PAIR WITH A CAREGIVER</b>. A 6-digit code appears.</li>
+      <li><b>Phone app:</b> sign in (judges: the login is in our submission deck) or create an account. Tap <b>+ Add a person</b>, type the code, <b>Send request</b>. On the watch tap <b>YES</b>.</li>
+      <li>Under the watch, press <b>Sugar creeping up</b>: the app shows an AI early warning while every reading is still normal.</li>
+      <li>Press <b>Start wandering</b>: an urgent alert arrives. Open the person, then <b>Locate</b>, to follow them on the map.</li>
+      <li>Open the person, then <b>Doctor report</b>, for the PDF with graphs. Press <b>Sugar high</b>, or hold <b>SOS</b> on the watch, for alerts.</li>
+    </ol>
+  </div>
+
+  <p class="narrow card">On a phone, open the app and the smartwatch in two tabs with the buttons above. On a laptop this page shows both side by side.</p>
+
+  <div class="stage">
+    <div class="device phone">
+      <h2>Caregiver's phone app</h2>
+      <iframe src="./" title="myDoc phone app for caregivers" allow="geolocation; clipboard-write; web-share"></iframe>
+    </div>
+    <div class="device">
+      <h2>Patient's smartwatch (simulator)</h2>
+      <iframe src="./watch.html" title="myDoc smartwatch simulator" allow="geolocation"></iframe>
+      <small>The controls under the watch stand in for its sensors. A second watch for the caregiver: open the smartwatch in a new tab and choose "I'm a caregiver".</small>
+    </div>
+  </div>
+</main>
+</body>
+</html>
