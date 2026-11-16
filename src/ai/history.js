@@ -16,8 +16,8 @@ function raw(k, hour, story, daysAgo) {
   // demo stories start 5 days ago and grow each day
   const grow = story && daysAgo <= 4 ? 5 - daysAgo : 0;
   if (k === 'sugar') { const meal = hour > 12 && hour < 20 ? 22 : 0; return { v: Math.round(102 + meal + noise(10) + (story === 'sugar' ? grow * 2.8 : 0)) }; }
-  if (k === 'bp') { const s = Math.round((hour < 11 ? 128 : 121) + noise(6) + (story === 'bp' ? grow * 2.3 : 0)); return { v: s, v2: Math.round(s * rnd(0.62, 0.67)) }; }
-  if (k === 'hr') return { v: Math.round(72 + (hour < 11 ? 4 : 0) + noise(5)) };
+  if (k === 'bp') { const s = Math.round((hour < 12 ? 128 : 121) + noise(6) + (story === 'bp' ? grow * 2.3 : 0)); return { v: s, v2: Math.round(s * rnd(0.62, 0.67)) }; }
+  if (k === 'hr') return { v: Math.round(72 + (hour < 12 ? 4 : 0) + noise(5)) };
   return { v: Math.round(97 + noise(1.5)) };
 }
 
