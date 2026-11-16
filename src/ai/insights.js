@@ -63,7 +63,10 @@ export function analyze({ readings, doses = [], doselog = {}, name = 'They', her
     const all = base.map((r) => r.v), whole = { med: median(all), sd: spread(all, k), n: all.length };
     const slot = {};
     for (const [b] of BUCKETS) { const v = base.filter((r) => bucketOf(r.at) === b).map((r) => r.v); if (v.length >= 3) slot[b] = { med: median(v), sd: spread(v, k), n: v.length }; }
-    const normOf = (at) => slot[bucketOf(at)] || whole;
+    // a time of day with too few readings borrows the nearest one that has enough
+    const centre = Object.fromEntries(BUCKETS.map(([b, a, z]) => [b, (a + z) / 2]));
+    const nearest = (b) => { let best = null; for (const k2 of Object.keys(slot)) { const d = Math.min(Math.abs(centre[k2] - centre[b]), 24 - Math.abs(centre[k2] - centre[b])); if (!best || d < best.d) best = { d, v: slot[k2] }; } return best ? best.v : whole; };
+    const normOf = (at) => { const b = bucketOf(at); return slot[b] || nearest(b); };
     const adjSd = spread(base.map((r) => r.v - normOf(r.at).med), k); // day-to-day spread once the daily rhythm is removed
     baseline[k] = { usual: round(whole.med, k), range: [round(whole.med - 2 * whole.sd, k), round(whole.med + 2 * whole.sd, k)], slots: Object.fromEntries(Object.entries(slot).map(([b, x]) => [b, round(x.med, k)])) };
     const label = NAMES[k], Label = label[0].toUpperCase() + label.slice(1);
@@ -101,8 +104,8 @@ export function analyze({ readings, doses = [], doselog = {}, name = 'They', her
     // 2. unusual latest reading (inside the general range, but not normal for this person)
     const last = rs[rs.length - 1];
     if (!trendItem && last.at > now - 3 * 3600000 && statusOf(k, last.v) === 'Normal') {
-      const nb = normOf(last.at), z = (last.v - nb.med) / nb.sd;
-      if (Math.abs(z) >= 3 && !(k === 'o2' && z > 0)) items.push({ // high oxygen is never a worry
+      const nb = normOf(last.at), z = (last.v - nb.med) / Math.max(nb.sd, adjSd);
+      if (Math.abs(z) >= 3.5 && !(k === 'o2' && z > 0)) items.push({ // high oxygen is never a worry
         id: k + '-unusual', k, level: 'watch', title: `Unusual ${label} for ${name}`,
         text: `${round(last.v, k)}${UNIT[k]} now; ${her} ${bucketOf(last.at)} ${label} is usually about ${round(nb.med, k)}${UNIT[k]}.`,
         why: ['Far from ' + her + ' own normal for this time of day, though inside the general range']

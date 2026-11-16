@@ -34,3 +34,10 @@ export function makeHistory(metrics, { days = 13, story = null, now = Date.now()
   }
   return out;
 }
+
+// A reading "now" that continues the same pattern as the history (and the story, if one is on),
+// so live readings agree with what early warning has learned.
+export function liveValue(k, story = null, now = Date.now()) {
+  const d = new Date(now);
+  return value(k, d.getHours() + d.getMinutes() / 60, story, 0);
+}

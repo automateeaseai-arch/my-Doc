@@ -1,0 +1,35 @@
+# Records the demo video from the live site (real map, routes and backend) and saves it
+# on the demo-video branch. Run by hand, or when the recording script changes.
+name: Demo video
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/demo-video/**', '.github/workflows/demo-video.yml']
+permissions:
+  contents: write
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: Wait for the newest site version
+        run: |
+          for i in $(seq 1 30); do curl -sf https://automateeaseai-arch.github.io/my-Doc/demo.html >/dev/null && break; sleep 10; done; sleep 45
+      - name: Record
+        run: mkdir -p out && node tools/demo-video/record.cjs https://automateeaseai-arch.github.io/my-Doc/ out
+      - name: Convert to MP4
+        run: |
+          ffmpeg -loglevel error -y -i out/raw.webm -c:v libx264 -preset slow -crf 21 -pix_fmt yuv420p -r 25 -movflags +faststart out/myDoc-demo.mp4
+          for t in 3 30 50 62 75 95 108 125; do ffmpeg -loglevel error -y -ss $t -i out/myDoc-demo.mp4 -frames:v 1 -vf scale=640:-1 out/frame-$t.jpg; done
+          ls -la out
+      - name: Save on the demo-video branch
+        run: |
+          cd out && rm -f raw.webm && git init -q -b demo-video
+          git add -A && git -c user.name="myDoc video" -c user.email="video@mydoc.invalid" commit -q -m "Demo video $(date -u '+%F %H:%M')"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" demo-video

@@ -6,7 +6,7 @@ import { startLive } from '../live.js';
 import { opticalSugar } from '../sensor/onwatch.js';
 import { sendPush } from '../push.js';
 import { analyze } from '../ai/insights.js';
-import { makeHistory } from '../ai/history.js';
+import { makeHistory, liveValue } from '../ai/history.js';
 import { distance, direction, metres, offset, walkingRoute, streetName } from '../geo.js';
 
 const KEY = 'mydoc.watch';
@@ -47,7 +47,7 @@ export const SCENARIOS = {
 
 let st = { ready: false, uid: null, code: null, pid: null, patient: null, today: {}, linked: false, lost: false, ...load() };
 const subs = new Set();
-const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, recovery: st.recovery, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, optical: st.optical, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
+const set = (patch) => { st = { ...st, ...patch }; save({ pid: st.pid, recovery: st.recovery, carer: st.carer, setup: st.setup, profile: st.profile, auto: st.auto, optical: st.optical, story: st.story, place: st.place, battery: st.battery, theme: st.theme }); subs.forEach((f) => f(st)); };
 export const getSim = () => st;
 export const onSim = (f) => { subs.add(f); return () => subs.delete(f); };
 export const setOption = (patch) => set(patch);
@@ -252,7 +252,7 @@ function startCarer() {
 // Simulator only: forget this watch and start setup again.
 export function resetWatch() {
   stop(); stopPairing(); stopWandering();
-  set({ setup: null, code: null, pid: null, recovery: null, showRecovery: false, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
+  set({ setup: null, story: null, code: null, pid: null, recovery: null, showRecovery: false, carer: null, patient: null, request: null, linked: false, lost: false, replaced: false, welcomeBack: '', seenLinked: false });
   if (carerStarted) location.reload(); // drop the caregiver's live data
 }
 
@@ -300,7 +300,9 @@ export async function sendReading(k, r) {
   } else if (s === 'Normal') { alerted[k] = 0; if (st.attention === k) set({ attention: null }); }
 }
 
-export async function sendNormal() { for (const k of metrics()) await sendReading(k, normal(k)); }
+// "Normal" readings follow the person's own pattern (and the demo story, while one is on).
+const usual = (k) => liveValue(k, st.story || null);
+export async function sendNormal() { for (const k of metrics()) await sendReading(k, usual(k)); }
 export async function runScenario(id) { const sc = SCENARIOS[id]; await sendReading(sc.k, sc.r()); }
 
 let ticks = 0;
@@ -308,7 +310,7 @@ async function tick() {
   if (!st.patient || !st.auto || document.hidden) return;
   ticks++;
   try {
-    for (const k of metrics()) if (k === 'hr' || ticks % 5 === 1) await sendReading(k, normal(k));
+    for (const k of metrics()) if (k === 'hr' || ticks % 5 === 1) await sendReading(k, usual(k));
   } catch { /* the record moved to another watch or was deleted mid-send: follow() shows that */ }
 }
 
@@ -457,6 +459,7 @@ export async function demoStory(story) {
   // random data: pick a fortnight where the story shows (it does in about 9 of 10)
   let h = makeHistory(metrics(), { story });
   for (let i = 0; story && i < 8 && !analyze({ readings: h }).items.some((x) => x.k === story && x.level === 'warn'); i++) h = makeHistory(metrics(), { story });
+  set({ story: story || null });
   await writeHistory(h);
   await runAnalysis();
 }
